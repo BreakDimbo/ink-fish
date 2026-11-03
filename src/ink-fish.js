@@ -1,4 +1,4 @@
-/*! ink-fish v1.3.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.3.1 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -391,7 +391,7 @@
         ? { ink: [ink[0] * 0.94 + 10, ink[1] * 0.92 + 6, ink[2] * 0.86], a: 1.12 * op, sh: [0, 0, 0], sa: 0.26 * sh,
             rs: [0, 0, 0], rsa: 0.5 * op, rh: [ink[0] * 0.7, ink[1] * 0.78, ink[2] * 0.9], rha: 0.2 * op,
             cin: [168, 62, 42], cid: [110, 36, 26], och: [190, 148, 86], ocd: [146, 102, 48], sumi: [24, 22, 20], pa: 0.76 * op,
-            wh: [226, 220, 208], wb: 1.32, wl: 0.3, pc: 0.8, ob: 1.42, sp: 0.065, fn: 0.7, gr: 0, eye: [20, 18, 16],
+            wh: [226, 220, 208], wb: 1.32, wl: 0.3, wn: 0, pc: 0.8, ob: 1.42, sp: 0.065, fn: 0.7, gr: 0, eye: [20, 18, 16],
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.62, 0.66, 0.7], qtr: [0.86, 0.95, 0.97],
@@ -399,7 +399,7 @@
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
-            wh: [255, 253, 247], wb: 0.24, wl: 0.55, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
+            wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
             qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.14, qfr: 1.3, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.11, qamb: 1.1, qhz: 0 };
     };
@@ -540,7 +540,8 @@
       var ue = R(0.48, 0.6), M0 = [line(-0.1, ue, 0, 0)], T0 = [line(ue - 0.1, ue + R(0.14, 0.24), R(-0.25, 0.25) * wk, 0)];
       if (r() < 0.6) M0.push(line(R(-0.1, 0.05), ue - R(0.05, 0.15), R(-1, 1) * wk * 0.45, 0));
       var C0 = [line(R(0.0, 0.1), R(0.3, 0.45), R(-0.3, 0.3) * wk, 0)], B0 = [];
-      for (var b = 0; b < 5; b++) B0.push(line(ue - R(0.0, 0.18), ue + R(0.16, 0.5), (b / 4 - 0.5) * wk * 1.2 + R(-0.1, 0.1) * wk, R(-0.03, 0.03)));
+      // the bristles split only at the very end of the stroke, so they don't scratch across the hi
+      for (var b = 0; b < 5; b++) B0.push(line(ue - R(0.0, 0.08), ue + R(0.12, 0.3), (b / 4 - 0.5) * wk * 1.2 + R(-0.1, 0.1) * wk, R(-0.03, 0.03)));
       return { c: 1, br: 1, m: M0, t: T0, k: C0, b: B0 };
     };
     var VARIETY = [
@@ -1082,8 +1083,9 @@
         g.fillStyle = rgba(ocdRGB, pa * pal.sp * 0.8); g.fill(band(F, 0.38));
       } else {
         // white koi: the back catches the light, the flanks keep the ink
+        // (on the dark pond only the broad band: the narrow one stacked on it read as a pale stripe down the spine)
         g.fillStyle = rgba(whRGB, fa * pal.wl * 0.36);
-        g.fill(band(F, 0.8)); if (!koiLite) g.fill(band(F, 0.42));
+        g.fill(band(F, 0.8)); if (!koiLite && pal.wn) g.fill(band(F, 0.42));
       }
       // pigment, one colour at a time (sumi over cinnabar): a soft bleed, the wash, a darker wet rim where
       // it dried, a paler heart, then granulation
@@ -1128,7 +1130,7 @@
         if (!koiLite) { g.strokeStyle = rgba(sumiRGB, sa * 0.1); g.lineWidth = F.L * 0.12; g.stroke(MP); }
         g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.95); g.lineWidth = F.L * 0.088; g.stroke(MP);
         g.lineWidth = F.L * 0.05; g.stroke(TP);
-        if (!koiLite) { g.lineCap = "butt"; g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.5); g.lineWidth = F.L * 0.006 + 0.35; g.stroke(DP); g.lineCap = "round"; }
+        if (!koiLite) { g.lineCap = "butt"; g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.36); g.lineWidth = F.L * 0.006 + 0.35; g.stroke(DP); g.lineCap = "round"; }
         g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.42); g.lineWidth = F.L * 0.05; g.stroke(KP);
         g.restore();
       }
@@ -1345,17 +1347,31 @@
     // page), real water stays and the test backs off (10 s, 20 s, … 2 min). Below ~25 fps with no gain from
     // quality 1, the flat water is tried once, for one window, the same way. A fallback is remembered for the tab
     // session (30 min), so the next page of the site starts flat instead of janking again.
-    var AJ = { st: 0, buf: [], warm: 0, m0: 0, next: 0, back: 10000, slow: 0 }, longAt = -1e9, SKEY = "ink-fish:water-fallback", lobs = null;
+    var AJ = { st: 0, buf: [], warm: 0, m0: 0, next: 0, back: 10000, slow: 0, sus: 0 }, longAt = -1e9, SKEY = "ink-fish:water-fallback", lobs = null;
     try { if (typeof PerformanceObserver === "function") (lobs = new PerformanceObserver(function (l) { var e = l.getEntries(); for (var i = 0; i < e.length; i++) longAt = M.max(longAt, e[i].startTime + e[i].duration); })).observe({ type: "longtask" }); } catch (e) {}
     var remembered = function () { try { var v = +Wn.sessionStorage.getItem(SKEY); return v > 0 && Date.now() - v < 18e5; } catch (e) { return false; } };
     var judgeReset = function (now, ms) { AJ.buf.length = 0; AJ.warm = now + ms; };
+    // a gap over a second is a resume (sleep, a backgrounded tab): start again after a warm-up. A frame that
+    // follows someone else's long task (a script, a GC, the host's layout) is a hitch, not the water: skipped,
+    // unless nearly every frame is one, which is what a device that can't draw the water looks like (there the
+    // frame itself is the long task). Gaps are capped so a few-fps device still lands in the median
+    var judgeSkip = function (now, gap) {
+      if (gap > 1000) { judgeReset(now, 1000); AJ.sus = 0; return true; }
+      if (now < AJ.warm) return true;
+      if (longAt > last - 20) { if (++AJ.sus < 20) return true; } else AJ.sus = 0;
+      AJ.buf.push(M.min(gap, 250));
+      return false;
+    };
+    // the median of a window: 60 frames, or two seconds once there are 15 (so a slow device is judged as fast)
+    var judgeMed = function () {
+      var B = AJ.buf, n = B.length, t = 0;
+      for (var i = 0; i < n; i++) t += B[i];
+      if (n < 60 && !(n >= 15 && t > 2000)) return 0;
+      return B.slice().sort(function (x, y) { return x - y; })[n >> 1];
+    };
     var judgeWater = function (now, gap) {
-      if (gap > 100) { judgeReset(now, 1000); return; }
-      if (longAt > last - 20) { AJ.buf.length = 0; return; }
-      if (now < AJ.warm) return;
-      AJ.buf.push(gap);
-      if (AJ.buf.length < 60) return;
-      var b = AJ.buf.slice().sort(function (x, y) { return x - y; }), m = b[30];
+      if (judgeSkip(now, gap)) return;
+      var m = judgeMed(); if (!m) return;
       AJ.buf.length = 0;
       var slow = m > 21;
       if (AJ.st === 0) {
@@ -1371,10 +1387,8 @@
     };
     // the one-window flat trial (below ~25 fps): judged by the same median, now with real water off
     var judgeFlat = function (now, gap) {
-      if (gap > 100 || longAt > last - 20 || now < AJ.warm) return;
-      AJ.buf.push(gap);
-      if (AJ.buf.length < 60) return;
-      var b = AJ.buf.slice().sort(function (x, y) { return x - y; }), m = b[30];
+      if (judgeSkip(now, gap)) return;
+      var m = judgeMed(); if (!m) return;
       AJ.buf.length = 0; AJ.flat = 0;
       if (m < AJ.m0 * 0.85) fallBack();
       else { waterFail = false; water.setQuality(0); AJ.st = 0; AJ.next = now + AJ.back; AJ.back = M.min(AJ.back * 2, 12e4); syncWater(); judgeReset(now, 500); }
@@ -1552,5 +1566,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.3.0" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.3.1" };
 });
