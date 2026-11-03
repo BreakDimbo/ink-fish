@@ -22,6 +22,7 @@
   var fish = InkFish.mount(document.body, {
     fixed: true,                 // 水池不动，页面在它上面滚动（默认 false：带滚动视差）
     ripples: true,               // 鼠标下极淡的水波纹（默认 false）
+    water: "real",               // 真实水面（WebGL2，默认 false）；不支持时自动退回 Canvas 2D
     koi: true,                   // 几尾彩色锦鲤（默认 false）
     obstacles: ".card",          // 鱼会绕开这些元素，且元素下方不画墨
     text: "h1, .intro",          // 文字下方的墨色会变淡
@@ -60,8 +61,9 @@ InkFish.mount(document.querySelector("#pond"), { count: 14 });
 | `shadow` | `1` | 灯下投影的透明度系数，`0` 关闭投影 |
 | `koi` | `false` | 彩色锦鲤：红白（kohaku）、丹顶（tancho）、山吹（yamabuki）、昭和（showa），用低饱和的朱砂与赭石“设色”。`true` 按宽度 3–6 尾（移动端 2 尾），或填数字；在 `count` 之外另加。注意与 `count.koi`（大的墨色鱼）不同；开启后墨色大鱼会相应减少 |
 | `ripples` | `false` | 鼠标下的水波纹：每移动 ≥120px 且间隔 ≥340ms 才起一圈（不是每次 mousemove），点击起一圈略强的；触屏只在轻点时起。每圈三道波前，内坡一线暗、外坡一线亮，低对比、慢衰减，最多同时 5 圈；经过鱼时会让鱼身轮廓轻微折射、并把鱼轻推开。减少动态效果时关闭 |
+| `water` | `false` | `"real"`：真实水面（v1.3）。一层 WebGL2 画布：波纹按毛细–重力色散 ω² = gk + (σ/ρ)k³ 从一点扩散（Cauchy–Poisson 环：中心静、短波跑在前面、最细的先消失），鱼和投影随水面斜率折射，池底有极淡的焦散光斑，波峰有一点 Fresnel 反光，深处的鱼略偏冷。`ripples` 仍控制鼠标波纹是否出现；只开 `water` 时只有极轻的环境涌浪。没有 WebGL2 / 浮点渲染目标、上下文丢失、或 `adaptive` 判断设备太慢时，自动退回 Canvas 2D 的平面水（`instance.water` 为 `"fallback"`）；减少动态效果时也用平面水。`ripples: "real"` 是 `ripples: true, water: "real"` 的简写 |
 | `fixed` | `false` | 整页模式：`true` 时水池固定在视口，页面在其上滚动（无视差，可游区域即视口）；`false` 保持 v1.0 的滚动视差 |
-| `adaptive` | `true` | 若帧持续迟到（慢设备光栅化大画布），自动一次性降到 DPR 1，并简化锦鲤笔触 |
+| `adaptive` | `true` | 若帧持续迟到（慢设备光栅化大画布）：开着真实水面时先退回平面水；否则一次性降到 DPR 1，并简化锦鲤笔触 |
 | `reducedMotion` | `"auto"` | `"auto"` 遵循 `prefers-reduced-motion`；`true` 始终“静水”模式；`false` 忽略 |
 | `interactive` | `true` | 是否响应鼠标、点击、快速滚动 |
 | `obstacles` | `""` | 选择器：绕行 + 擦除下方墨迹 |
@@ -77,7 +79,9 @@ InkFish.mount(document.querySelector("#pond"), { count: 14 });
 
 v1.1 新增的 `fixed`、`ripples`、`koi` 默认都关闭，v1.0 的用法与外观不变；唯一的结构变化是投影改为独立画布，宿主里会多一个 `canvas.ink-fish--shadow`（在主画布之前）。演示页三者都打开。
 
-返回的实例：`{ canvas, stats, fish, running, layout(), set(opts), destroy() }`（`stats.dpr` 为当前画布 DPR）。`set({ koi })` 会让锦鲤淡入/淡出，不会打乱鱼群。`layout()` 用于页面结构变化但没有 resize 时重新测量。
+v1.3 新增的 `water` 默认关闭，不开时外观与 v1.2.1 完全相同；开启后宿主里多一个 `canvas.ink-fish--water`（在主画布之后），两张 2D 画布仍在后台绘制、作为纹理上传，但不显示。演示页开启了 `water: "real"`。
+
+返回的实例：`{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }`（`stats.dpr` 为当前画布 DPR；`water` 为 `"real"` / `"flat"` / `"fallback"`）。`set({ koi })` 会让锦鲤淡入/淡出，不会打乱鱼群。`layout()` 用于页面结构变化但没有 resize 时重新测量。
 
 ## 渲染原理
 
@@ -90,16 +94,21 @@ v1.1 新增的 `fixed`、`ripples`、`koi` 默认都关闭，v1.0 的用法与�
 - **水墨质感**：身体是沿脊椎的二次贝塞尔轮廓，线性渐变让墨在头部和背脊积聚、向尾部化开；鳍和尾更淡；鲤鱼和锦鲤有一笔背脊线和眼睛，锦鲤尾鳍有细鳍条。
 - **便宜的软阴影**：投影画在一张独立的 1/4 分辨率画布上，由合成器放大，插值得到柔边，不用 blur 滤镜，主画布也不用每帧做整幅放大拷贝。两张画布都提升为独立合成层（`will-change: transform; contain: strict`），重绘画布不会重绘页面；尺寸真正变化时才重新分配画布（移动端地址栏伸缩不会触发）。
 - **水波纹**：每圈是三道向外扩散、逐渐减速的波前，内侧一道极淡的冷灰暗线（两道略微错位叠成，所以一侧稍粗、一侧稍细）、外侧一道极淡的亮线，像水面的斜坡（暗色模式下这道亮线是极淡的冷白，在近黑底上与浅色模式一样克制）；经过鱼时按径向把鱼的脊椎点推移 1–2px，形成折射感。
+- **真实水面（`water: "real"`）**：四个 WebGL2 pass。① 每个活着的波纹按波数求和出径向剖面 η(r)、dη/dr：Cauchy–Poisson 解 η = Σ F(k,t)·J0(kr)，源谱 k·e^(−k²a²/4)，相位 ω(k)·t，ω² = gk + (σ/ρ)k³（σ/ρ = 7.4e-5，取自 Ultra Water），粘性衰减 e^(−2νk²t)；Bessel 表在 CPU 上算一次（Abramowitz & Stegun 多项式），每帧只上传 8×192 个谱值。时间放慢到 0.22 倍、尺度 0.6 mm/px，所以一个波长约 28px、像慢镜头里的一滴水。② 半分辨率的水面：十六道色散平面波组成的环境涌浪（Tessendorf 式谱，方向张开成扇形，焦散是网而不是织纹）加上各个波纹，同时算出障碍/文字处的遮罩。③ 焦散用 Evan Wallace 的面积比法：一张每 4px 一个顶点的网格按斜率折射到池底，每个三角形输出“原面积 / 新面积”并叠加，所以光只是被重新分配（均值 1）；斜率用三次 B 样条采样，再按天空张角做一点半影模糊，不会出现珠子状亮点。④ 合成：鱼按斜率 × 浅深度、投影按斜率 × 池底深度各自偏移采样（折射），池底被焦散照亮，Beer–Lambert 透射让深处的鱼略偏冷，最后叠一层 Schlick Fresnel 反射的柔和天空（F0 = 0.02）。浅色、深色各有一套参数，随主题渐变。输出是预乘的“纸 × (1−a) + rgb”，页面背景照样透出来。不用辉光、粒子、色散或抖动。
 - **锦鲤**：与墨鱼同一套笔墨。色块定义在“身体坐标”里（沿脊椎 s、横向 t），轮廓由几组按鱼随机播种的谐波生成分瓣与细碎的笔触边，每帧沿脊椎映射，所以花纹随身体弯曲、越过背脊被身体轮廓裁切，每尾都不一样。每块颜料依次画：柔和晕边、主色、干后更深的水痕边、更浅的中心、细颗粒（预渲染的噪点图案）。丹顶是略不规则的椭圆；山吹的金色沿脊背更深、向腹侧变浅；昭和白底朱红，墨则是几笔真正的笔触：从体侧起笔、越过背脊，笔肚饱满、行笔变窄，收笔处散成几缕干笔飞白，并按身体轮廓裁切。背鳍是一片细长、前宽后收的淡墨。胸鳍和尾鳍长而半透明、带细鳍条，尾鳍在转身时滞后摆动；头部更钝，带一对淡淡的须。暗色模式下颜料压低、只给白色一点提亮，不发光。锦鲤转弯半径更大、速度缓慢起伏。
 - **障碍与文字**：`obstacles` 区域用 `destination-out` 擦除；`text` 区域附近按距离平滑降低墨色。
 - **主题**：浅色是暖调的墨，深色是略暖的浅墨；切换主题时 500ms 渐变过渡。
-- **减少动态效果**：`prefers-reduced-motion` 下鱼几乎静止，约每秒绘制 10 次。
+- **减少动态效果**：`prefers-reduced-motion` 下鱼几乎静止，约每秒绘制 10 次；没有波纹，真实水面也退回平面水。
 
 性能参考（在 zh-blog-mirrors 首页实测）：平均约 0.6 ms/帧；1440px 宽时 57 条鱼，390px 宽时 30 条。演示页（固定水池 + 锦鲤 + 波纹，headless Chromium）：1440px 约 0.8 ms/帧（58 条），390px 约 0.5 ms/帧（31 条）；锦鲤与波纹合计约 +0.2 ms/帧（帧持续偏慢时 `adaptive` 会同时简化锦鲤）。滚动测试：4× CPU 降速、1440px 时平均帧间隔从 47.6 ms 降到 19.6 ms，长任务从 69 个降到 0。
 
 ## 浏览器支持
 
-需要 Canvas 2D、`requestAnimationFrame`、`ResizeObserver`、`MutationObserver`、`matchMedia().addEventListener`（局部水池模式另需 `IntersectionObserver`）。即当前的 Chrome / Edge / Firefox，以及 Safari 14+ / iOS 14+。不支持 Canvas 的环境下 `mount()` 返回 `null`，页面不受影响。打印时隐藏。演示页已在无头 Chromium 中验证。
+需要 Canvas 2D、`requestAnimationFrame`、`ResizeObserver`、`MutationObserver`、`matchMedia().addEventListener`（局部水池模式另需 `IntersectionObserver`）。即当前的 Chrome / Edge / Firefox，以及 Safari 14+ / iOS 14+。不支持 Canvas 的环境下 `mount()` 返回 `null`，页面不受影响。`water: "real"` 另需 WebGL2 与 `EXT_color_buffer_float`，缺少时自动用平面水。打印时隐藏。演示页已在无头 Chromium 中验证。
+
+## 致谢
+
+真实水面的方法来自：[Ultra Water](https://github.com/Humpalumps/Ultra-Water)（Humpalumps，MIT：Cauchy–Poisson 波纹、毛细色散常数、B 样条焦散、Beer–Lambert、Fresnel）、Evan Wallace 的 WebGL 实时焦散（面积比法）、Jerry Tessendorf《Simulating Ocean Water》（色散与波谱）。只借用了方法，没有复制代码，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 许可证
 
@@ -125,6 +134,7 @@ It started life behind the bookshelves on the [zh-blog-mirrors](https://github.c
   var fish = InkFish.mount(document.body, {
     fixed: true,                 // the pond stays put; the page scrolls over it (default false: parallax)
     ripples: true,               // faint water rings under the cursor (default false)
+    water: "real",               // real water surface (WebGL2, default false); falls back to Canvas 2D
     koi: true,                   // a few painted koi (default false)
     obstacles: ".card",          // fish swim around these, and no ink is drawn under them
     text: "h1, .intro",          // ink thins under this text
@@ -163,8 +173,9 @@ Include `src/ink-fish.css` as well (fade-in, hidden in print, `isolation` stacki
 | `shadow` | `1` | Multiplies the lamp-shadow alpha; `0` turns shadows off |
 | `koi` | `false` | Painted koi — kohaku, tancho, yamabuki, showa — in muted cinnabar and ochre washes. `true` = 3–6 by width (2 on mobile), or a number; added on top of `count`. Not the same as `count.koi` (the large ink fish); with painted koi on, there are fewer of those |
 | `ripples` | `false` | Water rings under the cursor: one per ≥120px and ≥340ms of travel (never per mousemove), a slightly stronger one on click; on touch, on tap only. Three wavefronts per ring, a hairline of shade inside and of light outside, low contrast, slow decay, at most 5 at once; a passing ring bends the fish it crosses and nudges them aside. Off under reduced motion |
+| `water` | `false` | `"real"`: a real water surface (v1.3). One WebGL2 canvas: rings disperse from a point by the capillary–gravity relation ω² = gk + (σ/ρ)k³ (Cauchy–Poisson rings: a quiet centre, short waves running ahead, the finest dying first), the fish and their shadows refract through the slope, the floor carries faint soft caustics, crests take a little Fresnel reflection, and deeper fish cool slightly. `ripples` still decides whether the cursor makes rings; with `water` alone only a very light ambient swell moves. Without WebGL2 / float render targets, on context loss, or when `adaptive` finds the device too slow, it falls back to the flat Canvas 2D water (`instance.water` reads `"fallback"`); reduced motion also uses the flat water. `ripples: "real"` is shorthand for `ripples: true, water: "real"` |
 | `fixed` | `false` | Page mode: `true` keeps the pond still while the page scrolls over it (no parallax; the swimming area is the viewport); `false` keeps v1.0's scroll parallax |
-| `adaptive` | `true` | If frames keep arriving late (a slow device rasterising a large canvas), drop once to DPR 1 and lighten the koi brushwork |
+| `adaptive` | `true` | If frames keep arriving late (a slow device rasterising a large canvas): with real water on, first fall back to the flat water; otherwise drop once to DPR 1 and lighten the koi brushwork |
 | `reducedMotion` | `"auto"` | `"auto"` respects `prefers-reduced-motion`; `true` always calm; `false` ignores it |
 | `interactive` | `true` | React to the cursor, taps and fast scrolling |
 | `obstacles` | `""` | Selector: avoided, and the canvas is erased under them |
@@ -180,7 +191,9 @@ Include `src/ink-fish.css` as well (fade-in, hidden in print, `isolation` stacki
 
 The v1.1 options `fixed`, `ripples` and `koi` are all off by default, so v1.0 usage and look are unchanged; the one structural change is that shadows now live on their own canvas, so the host gets an extra `canvas.ink-fish--shadow` (just before the main canvas). The demo turns all three on.
 
-The returned instance: `{ canvas, stats, fish, running, layout(), set(opts), destroy() }` (`stats.dpr` is the current canvas DPR). `set({ koi })` fades koi in or out without reshuffling the shoal. Call `layout()` after your page changes structure without a resize.
+The v1.3 option `water` is off by default, and without it the look is exactly v1.2.1's. With it on, the host gets one more canvas, `canvas.ink-fish--water` (after the main canvas); the two 2D canvases keep drawing and are uploaded as textures but are hidden. The demo turns on `water: "real"`.
+
+The returned instance: `{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }` (`stats.dpr` is the current canvas DPR; `water` is `"real"`, `"flat"` or `"fallback"`). `set({ koi })` fades koi in or out without reshuffling the shoal. Call `layout()` after your page changes structure without a resize.
 
 ### How it renders
 
@@ -193,16 +206,17 @@ The returned instance: `{ canvas, stats, fish, running, layout(), set(opts), des
 - **Ink look.** Bodies are quadratic-Bézier outlines along the spine with a linear gradient that pools ink at the head and washes out toward the tail; fins and tail are paler; carp and koi get a dorsal brush stroke and eyes, koi get fine tail rays.
 - **Cheap soft shadows** are drawn on their own quarter-resolution canvas, which the compositor scales up — interpolation softens them with no blur filter, and the main canvas never pays for a full-size blit. Both canvases are promoted layers (`will-change: transform; contain: strict`), so redrawing them never repaints the page; the backing store is reallocated only when its size really changes (not when a mobile URL bar slides).
 - **Ripples.** Each ring is a short train of three decelerating wavefronts: a hairline of cool shade on the inner slope (doubled slightly off-centre, so the ring thickens on one side and thins on the other), a hairline of light on the outer (in dark mode that lit side is a faint, pale, cool line, so the rings stay as quiet on near-black as on paper). Where a ring crosses a fish, the spine points shift radially by a pixel or two, which reads as refraction.
+- **Real water (`water: "real"`).** Four WebGL2 passes. ① Each live ring's radial profile η(r), dη/dr is summed over wavenumber: the Cauchy–Poisson solution η = Σ F(k,t)·J0(kr), with a source spectrum k·e^(−k²a²/4), phase ω(k)·t, ω² = gk + (σ/ρ)k³ (σ/ρ = 7.4e-5, Ultra Water's value) and viscous decay e^(−2νk²t); the Bessel table is built once on the CPU (Abramowitz & Stegun polynomials) and only 8×192 spectrum values are uploaded per frame. Time runs at 0.22× and the scale is 0.6 mm/px, so a wavelength is ~28 px, like a raindrop in slow motion. ② A half-resolution surface: an ambient swell of sixteen dispersive plane waves (a Tessendorf-style spectrum fanned across directions, so the caustics form a net, not a weave) plus the rings, along with the obstacle/text mask. ③ Caustics by Evan Wallace's area ratio: a grid with a vertex every 4 px is refracted onto the floor and each triangle adds old area / new area, so light is only redistributed (mean 1); slopes are sampled through a cubic B-spline and the result gets a small penumbra blur for the sky's angular size, so nothing lands as beads. ④ Composite: the fish are sampled offset by slope × a shallow depth and the shadows by slope × the floor depth (refraction), the floor is lit by the caustics, Beer–Lambert transmittance cools the deeper fish slightly, and a soft sky is added by Schlick Fresnel reflection (F0 = 0.02). Light and dark themes each have their own constants, cross-faded with the theme. The output is premultiplied "paper × (1−a) + rgb", so the page background still shows through. No glow, particles, chromatic aberration or jitter.
 - **Koi.** The same brush language as the ink fish. Each patch is defined in body space (s along the spine, t across it) with a lobed, scalloped rim from a few per-fish seeded harmonics, and mapped through the spine every frame, so the pattern bends with the body, wraps over the back and is clipped by the silhouette — no two fish alike. Each patch is laid in as a soft halo, the wash, a darker wet-edge rim, a paler heart and fine granulation (a pre-rendered grain pattern). Tancho gets a slightly irregular oval crown, yamabuki a gold that deepens down the spine and pales to the belly, showa cinnabar on white with sumi laid as real brush strokes — each lands off a flank, sweeps over the back, narrows as the brush lifts and ends in a few dry bristle streaks, clipped to the body. The dorsal fin is a long, thin leaf of pale ink that tapers off. Pectoral fins and tail are long and translucent with fine rays, and the tail trails on a turn; the head is blunter, with faint barbels. In dark mode the pigment is held down and only the whites are lifted a little — nothing glows. Koi turn in wider arcs and their pace drifts slowly.
 - **Obstacles and text.** Obstacle rects are erased with `destination-out`; ink fades smoothly near `text` rects.
 - **Themes.** Warm sumi ink in light mode, slightly warmed pale ink in dark mode, cross-faded over 500 ms on a theme switch.
-- **Reduced motion.** Under `prefers-reduced-motion` the fish barely drift and the canvas redraws about 10 times a second.
+- **Reduced motion.** Under `prefers-reduced-motion` the fish barely drift and the canvas redraws about 10 times a second; there are no ripples, and real water falls back to the flat water.
 
 Performance, measured on the zh-blog-mirrors homepage: about 0.6 ms per frame on average; 57 fish at 1440px wide, 30 at 390px. On the demo page (fixed pond + koi + ripples, headless Chromium): ~0.8 ms/frame at 1440px (58 fish), ~0.5 ms/frame at 390px (31); koi and ripples together add ~0.2 ms/frame (when frames keep arriving late, `adaptive` also lightens the koi). In a scroll test at 1440px with a 4× CPU throttle, the mean frame interval went from 47.6 ms (v1.0 demo) to 19.6 ms and long tasks from 69 to 0.
 
 ### Browser support
 
-Needs Canvas 2D, `requestAnimationFrame`, `ResizeObserver`, `MutationObserver` and `matchMedia().addEventListener` (plus `IntersectionObserver` for element mode): current Chrome, Edge and Firefox, and Safari 14+ / iOS 14+. Where Canvas is unavailable `mount()` returns `null` and the page is unaffected. Hidden in print. The demo is verified in headless Chromium.
+Needs Canvas 2D, `requestAnimationFrame`, `ResizeObserver`, `MutationObserver` and `matchMedia().addEventListener` (plus `IntersectionObserver` for element mode): current Chrome, Edge and Firefox, and Safari 14+ / iOS 14+. Where Canvas is unavailable `mount()` returns `null` and the page is unaffected. `water: "real"` also needs WebGL2 with `EXT_color_buffer_float`, and uses the flat water without them. Hidden in print. The demo is verified in headless Chromium.
 
 ### Reproducing the zh-blog-mirrors homepage
 
@@ -221,6 +235,10 @@ InkFish.mount(document.body, {
   ]
 });
 ```
+
+### Credits
+
+The real-water methods come from [Ultra Water](https://github.com/Humpalumps/Ultra-Water) (Humpalumps, MIT: Cauchy–Poisson rings, the capillary dispersion constant, B-spline caustics, Beer–Lambert, Fresnel), Evan Wallace's realtime WebGL caustics (the area ratio) and Jerry Tessendorf's "Simulating Ocean Water" (dispersion and spectra). Only the methods are borrowed, no code; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ### License
 

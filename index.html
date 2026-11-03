@@ -261,6 +261,10 @@
         <span class="sw-wrap"><span class="state" id="rp-s" aria-hidden="true">On</span><input class="sw" type="checkbox" id="rp" role="switch" checked></span>
       </div>
       <div class="row">
+        <label class="lab" for="wa">Real water<span class="zh">真水</span></label>
+        <span class="sw-wrap"><span class="state" id="wa-s" aria-hidden="true">On</span><input class="sw" type="checkbox" id="wa" role="switch" checked></span>
+      </div>
+      <div class="row">
         <label class="lab" for="ko">Koi<span class="zh">锦鲤</span></label>
         <span class="sw-wrap"><span class="state" id="ko-s" aria-hidden="true">On</span><input class="sw" type="checkbox" id="ko" role="switch" checked></span>
       </div>
@@ -284,6 +288,7 @@
   var fish = InkFish.mount(document.body, {
     fixed: true,                 <span class="c">// the pond stays put; the page scrolls over it</span>
     ripples: true, koi: true,    <span class="c">// rings under the cursor; a few painted koi</span>
+    water: <span class="s">"real"</span>,               <span class="c">// refraction, caustics, dispersive rings (WebGL2; else 2D)</span>
     obstacles: <span class="s">".card"</span>,          <span class="c">// swum around; no ink under them</span>
     text: <span class="s">"h1, .intro"</span>,          <span class="c">// ink thins under this text</span>
     title: <span class="s">"h1"</span>                  <span class="c">// the koi give the headline room</span>
@@ -336,6 +341,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
           <tr><td><code>reducedMotion</code></td><td><code>"auto"</code></td><td><code class="inl">"auto"</code> respects <code class="inl">prefers-reduced-motion</code>; <code class="inl">true</code> always calm; <code class="inl">false</code> ignores it.</td></tr>
           <tr><td><code>interactive</code></td><td><code>true</code></td><td>React to the cursor, taps and fast scrolling.</td></tr>
           <tr><td><code>ripples</code></td><td><code>false</code></td><td>Faint water rings: one every 120&thinsp;px and 340&thinsp;ms of cursor travel, a slightly stronger one on click; on touch, on tap only. They bend the fish they cross. Off under reduced motion.</td></tr>
+          <tr><td><code>water</code></td><td><code>false</code></td><td><code class="inl">"real"</code>: a WebGL2 water surface. Rings disperse by the capillary–gravity relation (finer wavelets run ahead and die first), fish and shadows refract through the slope, the floor carries faint caustics, crests a little Fresnel. Falls back to the flat 2D water without WebGL2, on a slow device (<code class="inl">adaptive</code>) and under reduced motion. <code class="inl">ripples: "real"</code> is shorthand for both.</td></tr>
           <tr><td><code>ignore</code></td><td><code>"a,button,input,select, textarea,label, [data-ink-fish-ignore]"</code></td><td>Clicks here don't startle fish; <code class="inl">obstacles</code> and <code class="inl">bands</code> are added automatically.</td></tr>
           <tr class="grp"><td colspan="3" class="caps">Layout</td></tr>
           <tr><td><code>obstacles</code></td><td><code>""</code></td><td>Selector: avoided, and the canvas is erased under them.</td></tr>
@@ -348,11 +354,11 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
           <tr class="grp"><td colspan="3" class="caps">Rendering</td></tr>
           <tr><td><code>mobileQuery</code></td><td><code>"(max-width: 720px)"</code></td><td>When it matches, mobile counts and sizes are used.</td></tr>
           <tr><td><code>maxDpr</code></td><td><code>1.5</code></td><td>Device-pixel-ratio cap.</td></tr>
-          <tr><td><code>adaptive</code></td><td><code>true</code></td><td>If frames keep arriving late, drop once to 1 device pixel per CSS pixel.</td></tr>
+          <tr><td><code>adaptive</code></td><td><code>true</code></td><td>If frames keep arriving late: with real water, fall back to the flat water first; otherwise drop once to 1 device pixel per CSS pixel.</td></tr>
           <tr><td><code>fadeIn</code></td><td><code>true</code></td><td>2.4&thinsp;s fade-in on first appearance.</td></tr>
         </tbody>
       </table>
-      <p class="api">The instance: <code>{ canvas, stats, fish, running, layout(), set(opts), destroy() }</code>. Call <code>layout()</code> after the page changes structure without a resize.</p>
+      <p class="api">The instance: <code>{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }</code>; <code>water</code> reads <code>"real"</code>, <code>"flat"</code> or <code>"fallback"</code>. Call <code>layout()</code> after the page changes structure without a resize.</p>
     </div>
   </section>
 
@@ -368,6 +374,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
         <li><span class="caps">vi</span><h3>Shadows without blur</h3><p>A quarter-resolution canvas of its own, scaled up by the compositor, so interpolation softens them for free. Under reduced motion the fish barely drift, redrawn about ten times a second.</p></li>
         <li><span class="caps">vii</span><h3>Rings on the surface</h3><p>A short train of three wavefronts per ring: a hairline of cool shade on the inner slope, a little thicker on one side, a hairline of light on the outer. Where a ring crosses a fish, its outline bends a pixel or two, radially.</p></li>
         <li><span class="caps">viii</span><h3>Pigment, then ink</h3><p>Koi patches live in body space&thinsp;—&thinsp;seeded, lobed, bending with the spine and clipped where they wrap the back&thinsp;—&thinsp;each laid in as a wash with a darker wet edge, a paler heart and a little granulation.</p></li>
+        <li><span class="caps">ix</span><h3>Real water</h3><p>Optional, in WebGL2. Each ring is a Cauchy–Poisson solution summed over wavenumber with ω² = gk + (σ/ρ)k³, so a quiet centre trails a train of finer capillary wavelets. Caustics by Evan Wallace’s area ratio through B-spline-smoothed slopes; fish and shadows refract by depth; a faint Fresnel sky. After Ultra Water (MIT), Tessendorf and Wallace.</p></li>
       </ul>
       <div class="measure">
         <div><b>~0.8&thinsp;ms</b><span class="caps">per frame, average</span></div>
@@ -444,6 +451,12 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
     sw("rm", function (on) { both({ reducedMotion: on ? true : "auto" }); });
     sw("sh", function (on) { both({ shadow: on ? 1 : 0 }); });
     sw("rp", function (on) { both({ ripples: on }); });
+    sw("wa", function (on) {
+      both({ water: on ? "real" : false });
+      var w = page && page.water; D.getElementById("wa-s").textContent = w === "real" ? "On" : w === "fallback" ? "2D" : "Off";
+    });
+    // show when the real water had to fall back to 2D (no WebGL2, or a slow device)
+    setInterval(function () { var el = D.getElementById("wa"); if (el.checked && page && page.water === "fallback") D.getElementById("wa-s").textContent = "2D"; }, 2000);
     sw("ko", function (on) { if (page) page.set({ koi: on }); if (pond) pond.set({ koi: on ? 2 : 0 }); });
 
     // copy buttons

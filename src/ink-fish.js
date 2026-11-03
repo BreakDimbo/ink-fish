@@ -1,4 +1,4 @@
-/*! ink-fish v1.2.1 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.3.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -11,7 +11,9 @@
    are erased from the canvas; ink under text is thinned. Layout is read only on resize/reflow, never
    inside the frame. Optional (v1.1): a fixed pond that stays put while the page scrolls over it,
    restrained water rings under the cursor that refract the fish they cross, and a few koi painted
-   in muted pigment washes.
+   in muted pigment washes. Optional (v1.3, water: "real"): one WebGL2 layer for real water: dispersive
+   Cauchy–Poisson rings, fish and shadows refracted by the slope, area-ratio caustics, a faint Fresnel
+   sky (methods after Ultra Water, MIT, see THIRD_PARTY_NOTICES.md); Canvas 2D stays the fallback.
 
    Usage:   var fish = InkFish.mount(document.body, { obstacles: ".card" });  …  fish.destroy();
    or:      <body data-ink-fish>   (options as JSON in the attribute value)                          */
@@ -1308,11 +1310,13 @@
       var dt = M.min(0.1, (now - last) / 1000);
       // adaptive resolution: if frames keep arriving late (a slow device rasterising a large canvas),
       // drop to 1 device pixel per CSS pixel, once
-      if (O.adaptive && !RM.matches && now - last < 100 && dprCap > 1) {
-        fema = fema * 0.96 + (now - last) * 0.04;
+      // (with real water on, slow frames count too, capped, so a GPU that only manages a few fps still trips it)
+      var gap = now - last;
+      if (O.adaptive && !RM.matches && gap < (realLive ? 1000 : 100) && (dprCap > 1 || realLive)) {
+        fema = fema * 0.96 + M.min(gap, 100) * 0.04;
         // the same signal also lightens the koi (no bleed, heart, grain or fin outlines)
         // with real water on, the first step is back to the flat Canvas 2D water
-        if (++fcount > 60 && fema > 21) {
+        if (++fcount > (realLive ? 30 : 60) && fema > 21) {
           if (realLive) { waterFail = true; syncWater(); fcount = 0; fema = 16.7; }
           else if (dpr > 1) { dprCap = 1; koiLite = true; measure(); }
         }
