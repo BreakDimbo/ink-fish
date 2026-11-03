@@ -228,7 +228,7 @@
         <p class="en">Brush-ink fish swimming in the paper behind your page.</p>
         <span class="zh" lang="zh-Hans">在网页背后的纸里游动的水墨鱼。零依赖，无需构建。</span>
       </div>
-      <p class="hint">Move slowly and the curious ones come to look; flick, and they scatter.<span class="zh" lang="zh-Hans">慢移鼠标，鱼会游来；快划，四散。</span></p>
+      <p class="hint">Move slowly and the curious ones come to look; flick, and they scatter. Press and drag to draw a long ripple.<span class="zh" lang="zh-Hans">慢移鼠标，鱼会游来；快划，四散；按住拖动，留一道长水纹。</span></p>
     </div>
     <div class="panel caps" role="group" aria-label="Demo controls">
       <div class="head"><span>Controls</span><span lang="zh-Hans" class="zh" style="letter-spacing:.2em">调节</span></div>
@@ -341,6 +341,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
           <tr><td><code>reducedMotion</code></td><td><code>"auto"</code></td><td><code class="inl">"auto"</code> respects <code class="inl">prefers-reduced-motion</code>; <code class="inl">true</code> always calm; <code class="inl">false</code> ignores it.</td></tr>
           <tr><td><code>interactive</code></td><td><code>true</code></td><td>React to the cursor, taps and fast scrolling.</td></tr>
           <tr><td><code>ripples</code></td><td><code>false</code></td><td>Faint water rings: one every 120&thinsp;px and 340&thinsp;ms of cursor travel, a slightly stronger one on click; on touch, on tap only. They bend the fish they cross. Off under reduced motion.</td></tr>
+          <tr><td><code>trail</code></td><td><code>true</code></td><td>With <code class="inl">ripples</code> on, press and drag in open water to draw one long water trail: a line source whose wavefronts run parallel to the stroke and spread to both sides. Hover keeps the gentle rings. On touch, hold ~250&thinsp;ms (or start sideways) before dragging; a vertical swipe still scrolls.</td></tr>
           <tr><td><code>water</code></td><td><code>false</code></td><td><code class="inl">"real"</code>: a WebGL2 water surface. Rings disperse by the capillary–gravity relation (finer wavelets run ahead and die first), fish and shadows refract through the slope, the floor carries faint caustics, crests a little Fresnel. Falls back to the flat 2D water without WebGL2, on a slow device (<code class="inl">adaptive</code>) and under reduced motion. <code class="inl">ripples: "real"</code> is shorthand for both.</td></tr>
           <tr><td><code>ignore</code></td><td><code>"a,button,input,select, textarea,label, [data-ink-fish-ignore]"</code></td><td>Clicks here don't startle fish; <code class="inl">obstacles</code> and <code class="inl">bands</code> are added automatically.</td></tr>
           <tr class="grp"><td colspan="3" class="caps">Layout</td></tr>
