@@ -61,7 +61,7 @@ InkFish.mount(document.querySelector("#pond"), { count: 14 });
 | `koi` | `false` | 彩色锦鲤：红白（kohaku）、丹顶（tancho）、山吹（yamabuki）、昭和（showa），用低饱和的朱砂与赭石“设色”。`true` 按宽度 3–6 尾（移动端 2 尾），或填数字；在 `count` 之外另加。注意与 `count.koi`（大的墨色鱼）不同；开启后墨色大鱼会相应减少 |
 | `ripples` | `false` | 鼠标下的水波纹：每移动 ≥120px 且间隔 ≥340ms 才起一圈（不是每次 mousemove），点击起一圈略强的；触屏只在轻点时起。每圈三道波前，内坡一线暗、外坡一线亮，低对比、慢衰减，最多同时 5 圈；经过鱼时会让鱼身轮廓轻微折射、并把鱼轻推开。减少动态效果时关闭 |
 | `fixed` | `false` | 整页模式：`true` 时水池固定在视口，页面在其上滚动（无视差，可游区域即视口）；`false` 保持 v1.0 的滚动视差 |
-| `adaptive` | `true` | 若帧持续迟到（慢设备光栅化大画布），自动一次性降到 DPR 1 |
+| `adaptive` | `true` | 若帧持续迟到（慢设备光栅化大画布），自动一次性降到 DPR 1，并简化锦鲤笔触 |
 | `reducedMotion` | `"auto"` | `"auto"` 遵循 `prefers-reduced-motion`；`true` 始终“静水”模式；`false` 忽略 |
 | `interactive` | `true` | 是否响应鼠标、点击、快速滚动 |
 | `obstacles` | `""` | 选择器：绕行 + 擦除下方墨迹 |
@@ -89,13 +89,13 @@ v1.1 新增的 `fixed`、`ripples`、`koi` 默认都关闭，v1.0 的用法与�
 - **交互**：鼠标快速划过会惊散附近的鱼；静止的鼠标会吸引好奇的鱼过来“看一看”；点击空白处惊鱼；快速滚动像一股水流。
 - **水墨质感**：身体是沿脊椎的二次贝塞尔轮廓，线性渐变让墨在头部和背脊积聚、向尾部化开；鳍和尾更淡；鲤鱼和锦鲤有一笔背脊线和眼睛，锦鲤尾鳍有细鳍条。
 - **便宜的软阴影**：投影画在一张独立的 1/4 分辨率画布上，由合成器放大，插值得到柔边，不用 blur 滤镜，主画布也不用每帧做整幅放大拷贝。两张画布都提升为独立合成层（`will-change: transform; contain: strict`），重绘画布不会重绘页面；尺寸真正变化时才重新分配画布（移动端地址栏伸缩不会触发）。
-- **水波纹**：每圈是三道向外扩散、逐渐减速的波前，内侧一道极淡的暗线、外侧一道极淡的亮线，像水面的斜坡；经过鱼时按径向把鱼的脊椎点推移 1–2px，形成折射感。
-- **锦鲤**：与墨鱼同一套笔墨——先淡墨或赭石铺身，再把朱砂色块用柔边径向渐变“点”在身上（裁剪在身体轮廓内），白色锦鲤靠一圈细轮廓线立在纸上。
+- **水波纹**：每圈是三道向外扩散、逐渐减速的波前，内侧一道极淡的冷灰暗线（两道略微错位叠成，所以一侧稍粗、一侧稍细）、外侧一道极淡的亮线，像水面的斜坡；经过鱼时按径向把鱼的脊椎点推移 1–2px，形成折射感。
+- **锦鲤**：与墨鱼同一套笔墨。色块定义在“身体坐标”里（沿脊椎 s、横向 t），轮廓由几组按鱼随机播种的谐波生成分瓣与细碎的笔触边，每帧沿脊椎映射，所以花纹随身体弯曲、越过背脊被身体轮廓裁切，每尾都不一样。每块颜料依次画：柔和晕边、主色、干后更深的水痕边、更浅的中心、细颗粒（预渲染的噪点图案）。丹顶是略不规则的椭圆；山吹的金色沿脊背更深、向腹侧变浅；昭和是白底上的朱红与笔触感的墨斑。胸鳍和尾鳍长而半透明、带细鳍条，尾鳍在转身时滞后摆动；头部更钝，带一对淡淡的须。暗色模式下颜料压低、只给白色一点提亮，不发光。锦鲤转弯半径更大、速度缓慢起伏。
 - **障碍与文字**：`obstacles` 区域用 `destination-out` 擦除；`text` 区域附近按距离平滑降低墨色。
 - **主题**：浅色是暖调的墨，深色是略暖的浅墨；切换主题时 500ms 渐变过渡。
 - **减少动态效果**：`prefers-reduced-motion` 下鱼几乎静止，约每秒绘制 10 次。
 
-性能参考（在 zh-blog-mirrors 首页实测）：平均约 0.6 ms/帧；1440px 宽时 57 条鱼，390px 宽时 30 条。演示页（固定水池 + 锦鲤 + 波纹，headless Chromium）：1440px 约 0.9 ms/帧（58 条），390px 约 0.55 ms/帧（31 条）；锦鲤与波纹合计约 +0.06 ms/帧。滚动测试：4× CPU 降速、1440px 时平均帧间隔从 47.6 ms 降到 20.1 ms，长任务从 69 个降到 0。
+性能参考（在 zh-blog-mirrors 首页实测）：平均约 0.6 ms/帧；1440px 宽时 57 条鱼，390px 宽时 30 条。演示页（固定水池 + 锦鲤 + 波纹，headless Chromium）：1440px 约 1.1 ms/帧（58 条），390px 约 0.7 ms/帧（31 条）；锦鲤与波纹合计约 +0.3 ms/帧（v1.2 的锦鲤笔触更多；帧持续偏慢时 `adaptive` 会同时简化锦鲤）。滚动测试：4× CPU 降速、1440px 时平均帧间隔从 47.6 ms 降到 20.1 ms，长任务从 69 个降到 0。
 
 ## 浏览器支持
 
@@ -164,7 +164,7 @@ Include `src/ink-fish.css` as well (fade-in, hidden in print, `isolation` stacki
 | `koi` | `false` | Painted koi — kohaku, tancho, yamabuki, showa — in muted cinnabar and ochre washes. `true` = 3–6 by width (2 on mobile), or a number; added on top of `count`. Not the same as `count.koi` (the large ink fish); with painted koi on, there are fewer of those |
 | `ripples` | `false` | Water rings under the cursor: one per ≥120px and ≥340ms of travel (never per mousemove), a slightly stronger one on click; on touch, on tap only. Three wavefronts per ring, a hairline of shade inside and of light outside, low contrast, slow decay, at most 5 at once; a passing ring bends the fish it crosses and nudges them aside. Off under reduced motion |
 | `fixed` | `false` | Page mode: `true` keeps the pond still while the page scrolls over it (no parallax; the swimming area is the viewport); `false` keeps v1.0's scroll parallax |
-| `adaptive` | `true` | If frames keep arriving late (a slow device rasterising a large canvas), drop once to DPR 1 |
+| `adaptive` | `true` | If frames keep arriving late (a slow device rasterising a large canvas), drop once to DPR 1 and lighten the koi brushwork |
 | `reducedMotion` | `"auto"` | `"auto"` respects `prefers-reduced-motion`; `true` always calm; `false` ignores it |
 | `interactive` | `true` | React to the cursor, taps and fast scrolling |
 | `obstacles` | `""` | Selector: avoided, and the canvas is erased under them |
@@ -192,13 +192,13 @@ The returned instance: `{ canvas, stats, fish, running, layout(), set(opts), des
 - **Interaction.** A fast cursor scatters nearby fish, a still cursor draws the curious ones in to look, a click in open water startles them, and a fast scroll is felt as a current.
 - **Ink look.** Bodies are quadratic-Bézier outlines along the spine with a linear gradient that pools ink at the head and washes out toward the tail; fins and tail are paler; carp and koi get a dorsal brush stroke and eyes, koi get fine tail rays.
 - **Cheap soft shadows** are drawn on their own quarter-resolution canvas, which the compositor scales up — interpolation softens them with no blur filter, and the main canvas never pays for a full-size blit. Both canvases are promoted layers (`will-change: transform; contain: strict`), so redrawing them never repaints the page; the backing store is reallocated only when its size really changes (not when a mobile URL bar slides).
-- **Ripples.** Each ring is a short train of three decelerating wavefronts: a hairline of shade on the inner slope, a hairline of light on the outer. Where a ring crosses a fish, the spine points shift radially by a pixel or two, which reads as refraction.
-- **Koi.** The same brush language as the ink fish: a pale ink or ochre wash for the body, then cinnabar patches laid in with soft-edged radial washes clipped to the body outline; pale koi stand on the paper by a fine outline.
+- **Ripples.** Each ring is a short train of three decelerating wavefronts: a hairline of cool shade on the inner slope (doubled slightly off-centre, so the ring thickens on one side and thins on the other), a hairline of light on the outer. Where a ring crosses a fish, the spine points shift radially by a pixel or two, which reads as refraction.
+- **Koi.** The same brush language as the ink fish. Each patch is defined in body space (s along the spine, t across it) with a lobed, scalloped rim from a few per-fish seeded harmonics, and mapped through the spine every frame, so the pattern bends with the body, wraps over the back and is clipped by the silhouette — no two fish alike. Each patch is laid in as a soft halo, the wash, a darker wet-edge rim, a paler heart and fine granulation (a pre-rendered grain pattern). Tancho gets a slightly irregular oval crown, yamabuki a gold that deepens down the spine and pales to the belly, showa cinnabar and brushy sumi on white. Pectoral fins and tail are long and translucent with fine rays, and the tail trails on a turn; the head is blunter, with faint barbels. In dark mode the pigment is held down and only the whites are lifted a little — nothing glows. Koi turn in wider arcs and their pace drifts slowly.
 - **Obstacles and text.** Obstacle rects are erased with `destination-out`; ink fades smoothly near `text` rects.
 - **Themes.** Warm sumi ink in light mode, slightly warmed pale ink in dark mode, cross-faded over 500 ms on a theme switch.
 - **Reduced motion.** Under `prefers-reduced-motion` the fish barely drift and the canvas redraws about 10 times a second.
 
-Performance, measured on the zh-blog-mirrors homepage: about 0.6 ms per frame on average; 57 fish at 1440px wide, 30 at 390px. On the demo page (fixed pond + koi + ripples, headless Chromium): ~0.9 ms/frame at 1440px (58 fish), ~0.55 ms/frame at 390px (31); koi and ripples together add ~0.06 ms/frame. In a scroll test at 1440px with a 4× CPU throttle, the mean frame interval went from 47.6 ms (v1.0 demo) to 20.1 ms and long tasks from 69 to 0.
+Performance, measured on the zh-blog-mirrors homepage: about 0.6 ms per frame on average; 57 fish at 1440px wide, 30 at 390px. On the demo page (fixed pond + koi + ripples, headless Chromium): ~1.1 ms/frame at 1440px (58 fish), ~0.7 ms/frame at 390px (31); koi and ripples together add ~0.3 ms/frame (the v1.2 koi carry more brushwork; when frames keep arriving late, `adaptive` also lightens the koi). In a scroll test at 1440px with a 4× CPU throttle, the mean frame interval went from 47.6 ms (v1.0 demo) to 20.1 ms and long tasks from 69 to 0.
 
 ### Browser support
 

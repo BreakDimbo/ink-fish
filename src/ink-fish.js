@@ -1,4 +1,4 @@
-/*! ink-fish v1.1.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.2.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -123,11 +123,13 @@
       // alpha; wb: the wash on a pale koi's body
       return dark
         ? { ink: [ink[0] * 0.94 + 10, ink[1] * 0.92 + 6, ink[2] * 0.86], a: 1.12 * op, sh: [0, 0, 0], sa: 0.26 * sh,
-            rs: [0, 0, 0], rsa: 0.5 * op, rh: [ink[0] * 0.92, ink[1] * 0.9, ink[2] * 0.84], rha: 0.075 * op,
-            cin: [194, 94, 70], och: [204, 160, 96], pa: 0.58 * op, wb: 1.45, ob: 1.45 }
+            rs: [0, 0, 0], rsa: 0.5 * op, rh: [ink[0] * 0.86, ink[1] * 0.9, ink[2] * 0.94], rha: 0.07 * op,
+            cin: [168, 62, 42], cid: [110, 36, 26], och: [190, 148, 86], ocd: [146, 102, 48], sumi: [24, 22, 20], pa: 0.76 * op,
+            wh: [226, 220, 208], wb: 1.32, wl: 0.3, pc: 0.8, ob: 1.42, sp: 0.065, fn: 0.7, gr: 0, eye: [20, 18, 16] }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
-            rs: [74, 56, 36], rsa: 0.1 * op, rh: [255, 253, 248], rha: 0.6 * op,
-            cin: [176, 60, 36], och: [172, 124, 60], pa: 0.68 * op, wb: 0.2, ob: 1 };
+            rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
+            cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
+            wh: [255, 253, 247], wb: 0.24, wl: 0.55, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20] };
     };
     var mixPal = function (a, b, k) {
       var o = {};
@@ -145,7 +147,7 @@
       palFrom = pal; palTo = p; palAt = performance.now();
       wake();
     };
-    var inkRGB = "", rsRGB = "", rhRGB = "", cinRGB = "", ochRGB = "";
+    var inkRGB = "", rsRGB = "", rhRGB = "", cinRGB = "", ochRGB = "", cidRGB = "", ocdRGB = "", sumiRGB = "", whRGB = "";
     var rgb = function (c) { return M.round(c[0]) + "," + M.round(c[1]) + "," + M.round(c[2]); };
     var tickPal = function (now) {
       if (palAt >= 0) {
@@ -154,6 +156,7 @@
         if (k >= 1) palAt = -1;
       }
       inkRGB = rgb(pal.ink); rsRGB = rgb(pal.rs); rhRGB = rgb(pal.rh); cinRGB = rgb(pal.cin); ochRGB = rgb(pal.och);
+      cidRGB = rgb(pal.cid); ocdRGB = rgb(pal.ocd); sumiRGB = rgb(pal.sumi); whRGB = rgb(pal.wh);
     };
 
     // ── layout (read only on resize / reflow) ──────────────────────────────────
@@ -221,12 +224,60 @@
       // nishikigoi: painted koi, a little larger and slower
       { name: "nishiki", d: [0.88, 1], L: [72, 96], wr: 0.13, tl: 0.4, vmax: [24, 32], cruise: 0.06, school: 0.1, avoid: 1, fins: 2, tone: [0.27, 0.31], big: 1, color: 1 }
     ];
-    // varieties: patches are [s along the body 0…1, lateral −1…1, radius ÷ L, stretch along the body]
+    // varieties. A patch is laid out in body space (s along the spine 0…1, t across it −1…1, beyond ±1 it
+    // wraps over the flank and is clipped by the silhouette) with a lobed, scalloped rim from a few seeded
+    // harmonics, so every fish is painted differently and the pigment bends with the body as it swims.
+    var seeded = function (a) { return function () { a = (a + 0x6d2b79f5) | 0; var t = M.imul(a ^ (a >>> 15), 1 | a); t = (t + M.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+    var PN = 18;
+    var mkPatch = function (r, c, s0, t0, ds, dt, rough) {
+      var R = function (a, b) { return a + r() * (b - a); }, H = [];
+      // low harmonics bend the outline into lobes; the high ones scallop the rim like a brush edge
+      H.push([2, R(0.04, 0.14) * rough, R(0, TAU)], [3, R(0.04, 0.11) * rough, R(0, TAU)], [5, R(0.02, 0.06) * rough, R(0, TAU)],
+        [7, R(0.015, 0.035) * rough, R(0, TAU)], [9, R(0.008, 0.02) * rough, R(0, TAU)]);
+      var tilt = R(-0.35, 0.35), core = new Float32Array(PN * 2), inner = new Float32Array(PN * 2), outer = new Float32Array(PN * 2), feath = new Float32Array(PN * 2);
+      var bang = R(0, TAU), bx = M.cos(bang) * 0.16, by = M.sin(bang) * 0.16; // the side the wet edge bled toward
+      var ic = R(-0.25, 0.25), cs = M.cos(tilt), sn = M.sin(tilt);
+      for (var j = 0; j < PN; j++) {
+        var th = j / PN * TAU, rr = 1;
+        for (var h = 0; h < H.length; h++) rr += H[h][1] * M.sin(H[h][0] * th + H[h][2]);
+        var x = M.cos(th), y = M.sin(th), xr = x * cs - y * sn, yr = x * sn + y * cs;
+        core[j * 2] = s0 + ds * rr * xr; core[j * 2 + 1] = t0 + dt * rr * yr;
+        // the bleed: a hair wider, with its own wobble, so the halo is not a constant offset
+        var ro = rr * (1.08 + 0.04 * M.sin(7 * th + H[1][2])), rf = rr * (1.2 + 0.07 * M.sin(5 * th + H[2][2]));
+        outer[j * 2] = s0 + ds * (ro * xr + bx * 0.5); outer[j * 2 + 1] = t0 + dt * (ro * yr + by * 0.5);
+        feath[j * 2] = s0 + ds * (rf * xr + bx); feath[j * 2 + 1] = t0 + dt * (rf * yr + by);
+        var ri = 0.5 + 0.1 * M.sin(3 * th + H[0][2]);
+        inner[j * 2] = s0 + ds * (ic * 0.4 + rr * ri * xr); inner[j * 2 + 1] = t0 + dt * (ic + rr * ri * yr);
+      }
+      return { c: c, core: core, inner: inner, outer: outer, feath: feath, tv: R(0, 1) };
+    };
     var VARIETY = [
-      { name: "kohaku", body: "pale", pig: "cin", patch: function () { var p = [[rnd(0.1, 0.2), rnd(-0.3, 0.3), rnd(0.1, 0.13), 1.5]]; p.push([rnd(0.36, 0.46), rnd(-0.35, 0.35), rnd(0.1, 0.14), 1.8]); if (M.random() < 0.7) p.push([rnd(0.58, 0.66), rnd(-0.3, 0.3), rnd(0.07, 0.1), 1.4]); return p; } },
-      { name: "tancho", body: "pale", pig: "cin", patch: function () { return [[0.11, 0, rnd(0.07, 0.08), 1.05]]; } },
-      { name: "yamabuki", body: "och", pig: "och", patch: function () { return []; } },
-      { name: "showa", body: "ink", pig: "cin", patch: function () { return [[rnd(0.08, 0.18), rnd(-0.4, 0.4), rnd(0.09, 0.12), 1.4], [rnd(0.4, 0.55), rnd(-0.5, 0.5), rnd(0.08, 0.11), 1.7]]; } }
+      { name: "kohaku", body: "pale", patch: function (r) {
+        var R = function (a, b) { return a + r() * (b - a); }, P = [];
+        if (r() < 0.85) P.push(mkPatch(r, 0, R(0.1, 0.15), R(-0.15, 0.15), R(0.065, 0.085), R(0.75, 1.05), 1));
+        var at = R(0.27, 0.33), n = 1 + (r() < 0.65) + (r() < 0.35);
+        for (var k = 0; k < n && at < 0.7; k++) {
+          var ds = R(0.07, 0.115), sc = M.min(0.74, at + ds);
+          P.push(mkPatch(r, 0, sc, R(-0.55, 0.55), ds, R(0.85, 1.45), 1.15));
+          at = sc + ds + R(0, 0.07);
+        }
+        return P;
+      } },
+      { name: "tancho", body: "pale", patch: function (r) { return [mkPatch(r, 0, 0.115 + r() * 0.02, (r() - 0.5) * 0.14, 0.056 + r() * 0.01, 0.62 + r() * 0.1, 0.5)]; } },
+      { name: "yamabuki", body: "och", patch: function () { return []; } },
+      { name: "showa", body: "pale", patch: function (r) {
+        var R = function (a, b) { return a + r() * (b - a); }, P = [];
+        P.push(mkPatch(r, 0, R(0.11, 0.16), R(-0.3, 0.3), R(0.06, 0.08), R(0.7, 1), 1.1));
+        P.push(mkPatch(r, 0, R(0.42, 0.56), R(-0.5, 0.5), R(0.08, 0.11), R(0.7, 1.1), 1.2));
+        // sumi: brushy, from the flanks, and a wedge on the head
+        P.push(mkPatch(r, 1, R(0.05, 0.08), R(-0.35, 0.35), R(0.035, 0.05), R(0.35, 0.5), 1.4));
+        // sumi bands climb out of alternate flanks down the body, spaced so the white between them stays open
+        for (var k = 0, at = R(0.2, 0.28), sd = r() < 0.5 ? -1 : 1, n = 3 + (r() < 0.4); k < n && at < 0.8; k++, sd = -sd) {
+          P.push(mkPatch(r, 1, at, sd * R(0.45, 0.85), R(0.034, 0.06), R(0.7, 1.05), 2));
+          at += R(0.12, 0.19);
+        }
+        return P;
+      } }
     ];
     var varAt = (M.random() * VARIETY.length) | 0;
     var free = function (x, y, pad) {
@@ -251,7 +302,7 @@
       f.v = f.vmax * 0.3; f.w = 0; f.th = K.cruise; f.thT = K.cruise; f.mode = 0; f.tm = rnd(0, 2);
       f.ph = rnd(0, TAU); f.amp = f.L * 0.05; f.vm = 1; f.cur = M.random(); f.fade = 0;
       f.w1 = rnd(0.07, 0.16); f.w2 = rnd(0.21, 0.37); f.p1 = rnd(0, TAU); f.p2 = rnd(0, TAU);
-      if (K.color) { f.V = VARIETY[varAt++ % VARIETY.length]; f.patch = f.V.patch(); }
+      if (K.color) { f.V = VARIETY[varAt++ % VARIETY.length]; f.patch = f.V.patch(seeded((M.random() * 4294967296) | 0)); f.tA = null; f.clk = rnd(0, 60); }
       f.n = 11; f.seg = f.L / (f.n - 1); f.px = new Float32Array(f.n); f.py = new Float32Array(f.n);
       for (var i = 0; i < f.n; i++) { f.px[i] = f.x - M.cos(f.a) * f.seg * i; f.py[i] = f.y - M.sin(f.a) * f.seg * i; }
       return f;
@@ -307,7 +358,7 @@
     var addRipple = function (x, y, s) {
       if (!O.ripples || RM.matches) return;
       if (rip.length >= RIP_MAX) rip.shift();
-      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s });
+      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s, q: rnd(0, TAU) });
       wake();
     };
     var kick = function (f, k) { f.mode = 1; f.tm = rnd(0.35, 0.6); f.thT = M.max(f.thT, k); };
@@ -428,20 +479,21 @@
 
         // ── turning: limited curvature, eased angular velocity ──
         var da = wrapA(M.atan2(fy, fx) - f.a);
-        var wmax = (0.45 + 2.1 * f.v / f.vmax) * (K.big ? 0.7 : 1);
+        var wmax = (0.45 + 2.1 * f.v / f.vmax) * (K.color ? 0.52 : K.big ? 0.7 : 1);
         var wt = clamp(da * 2.2, -wmax, wmax);
-        f.w += (wt - f.w) * M.min(1, dt * 3);
+        f.w += (wt - f.w) * M.min(1, dt * (K.color ? 1.7 : 3));
         f.a = wrapA(f.a + f.w * dt);
 
         // ── rhythm: burst, then a long glide ──
         f.tm -= dt;
         if (f.tm <= 0) {
-          if (f.mode === 1 || rm) { f.mode = 0; f.tm = rnd(1.1, 3.4) * (K.big ? 1.6 : 1) * (rm ? 3 : 1); f.thT = K.cruise * rnd(0.6, 1.3); }
-          else { f.mode = 1; f.tm = rnd(0.35, 0.8) * (0.7 + L / 120); f.thT = rnd(0.55, 0.9); }
+          if (f.mode === 1 || rm) { f.mode = 0; f.tm = rnd(1.1, 3.4) * (K.color ? 2.2 : K.big ? 1.6 : 1) * (rm ? 3 : 1); f.thT = K.cruise * rnd(0.6, 1.3); }
+          else { f.mode = 1; f.tm = rnd(0.35, 0.8) * (0.7 + L / 120) * (K.color ? 1.5 : 1); f.thT = K.color ? rnd(0.35, 0.62) : rnd(0.55, 0.9); }
         }
         f.th += (f.thT - f.th) * M.min(1, dt * (f.thT > f.th ? 5 : 1.4));
         f.vm += (1 - f.vm) * M.min(1, dt * 0.6);
         var vt = f.vmax * (0.14 + 0.86 * f.th) * f.vm * (rm ? 0.35 : 1);
+        if (K.color) { f.clk += dt; vt *= 0.8 + 0.2 * M.sin(f.clk * 0.21) * M.sin(f.clk * 0.077 + 1); } // a koi's pace drifts
         f.v += (vt - f.v) * M.min(1, dt * (vt > f.v ? 2.4 : 0.5));
         f.x += M.cos(f.a) * f.v * dt; f.y += M.sin(f.a) * f.v * dt;
         // tail beat: faster with speed and thrust, faster for small fish; wider when thrusting or turning
@@ -471,6 +523,8 @@
       // top-down fish: rounded head, widest at a third, slender peduncle
       return s < 0.3 ? 0.5 + 0.5 * M.sin(s / 0.3 * PI / 2) : 0.13 + 0.87 * M.pow(M.cos((s - 0.3) / 0.7 * PI / 2), 1.25);
     };
+    var BANK = 0;
+    var kshape = function (s) { return s < 0.3 ? 0.64 + 0.36 * M.sin(s / 0.3 * PI / 2) : shape(s); };
     var spine = function (f, oy) {
       var n = f.n;
       for (var i = 0; i < n; i++) {
@@ -492,12 +546,12 @@
           CX[pi] += ddx / dd * disp; CY[pi] += ddy / dd * disp;
         }
       }
-      var bank = clamp(f.w * 0.22, -0.3, 0.3);
+      var bank = clamp(f.w * 0.22, -0.3, 0.3); BANK = bank;
       for (var k = 0; k < n; k++) {
         var j0 = k > 0 ? k - 1 : 0, j1 = k < n - 1 ? k + 1 : n - 1;
         var ux = CX[j0] - CX[j1], uy = CY[j0] - CY[j1], ul = M.hypot(ux, uy) || 1;
         NX[k] = -uy / ul; NY[k] = ux / ul;
-        var w = f.L * f.K.wr * shape(k / (n - 1)) * (1 - M.abs(bank) * 0.25);
+        var w = f.L * f.K.wr * (f.K.color ? kshape : shape)(k / (n - 1)) * (1 - M.abs(bank) * 0.25);
         WD[k] = w;
         LX[k] = CX[k] + NX[k] * w * (1 + bank); LY[k] = CY[k] + NY[k] * w * (1 + bank);
         RX[k] = CX[k] - NX[k] * w * (1 - bank); RY[k] = CY[k] - NY[k] * w * (1 - bank);
@@ -505,7 +559,7 @@
     };
     var bodyPath = function (c, f, sc, dx, dy) {
       var n = f.n, hx = CX[0] - CX[1], hy = CY[0] - CY[1], hl = M.hypot(hx, hy) || 1;
-      var tipX = CX[0] + hx / hl * f.L * 0.05, tipY = CY[0] + hy / hl * f.L * 0.05;
+      var tn = f.K.color ? 0.035 : 0.05, tipX = CX[0] + hx / hl * f.L * tn, tipY = CY[0] + hy / hl * f.L * tn;
       c.moveTo((tipX + dx) * sc, (tipY + dy) * sc);
       c.quadraticCurveTo((LX[0] + dx) * sc, (LY[0] + dy) * sc, ((LX[0] + LX[1]) / 2 + dx) * sc, ((LY[0] + LY[1]) / 2 + dy) * sc);
       for (var i = 1; i < n - 1; i++) c.quadraticCurveTo((LX[i] + dx) * sc, (LY[i] + dy) * sc, ((LX[i] + LX[i + 1]) / 2 + dx) * sc, ((LY[i] + LY[i + 1]) / 2 + dy) * sc);
@@ -563,67 +617,174 @@
 
     var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), get dpr() { return dpr; } };
     var rgba = function (c, a) { return "rgba(" + c + "," + M.max(0, a).toFixed(3) + ")"; };
-    // painted koi: the same wash language as the ink fish, with pigment laid in soft patches clipped to the body
+    // ── painted koi ───────────────────────────────────────────────────────────
+    // one small tile, made once: granulation, pigment settling into the paper's tooth
+    var tile = function (n, paint) { var c = D.createElement("canvas"); c.width = c.height = n; paint(c.getContext("2d"), n); return c; };
+    var grainT = tile(96, function (c, n) {
+      // fine, uneven tooth: many faint specks, a few clustered darker ones
+      for (var i = 0; i < 2200; i++) { c.fillStyle = "rgba(0,0,0," + (0.08 + M.random() * M.random() * 0.5).toFixed(2) + ")"; c.fillRect(M.random() * n, M.random() * n, 0.6 + M.random() * 0.7, 0.6 + M.random() * 0.7); }
+    });
+    var grainP = null, koiLite = false, PM = typeof DOMMatrix === "function" ? new DOMMatrix() : null;
+    var patTo = function (P, x, y, a, k) {
+      if (!P || !PM || !P.setTransform) return;
+      var c = M.cos(a) * k, s = M.sin(a) * k;
+      PM.a = c; PM.b = s; PM.c = -s; PM.d = c; PM.e = x; PM.f = y;
+      P.setTransform(PM);
+    };
+    // body space → screen: s along the spine (0 snout … 1 peduncle), t across it in half-widths
+    var QX = 0, QY = 0, TMAX = 0.98;
+    var bmap = function (F, s, t) {
+      // t is held just inside the silhouette (per side, as the body banks), and narrowed near the snout,
+      // so pigment that "wraps over the flank" stops at the outline without a clip
+      var e = F.n - 1, tm = TMAX * M.min(1, 0.5 + s * 5);
+      if (s < 0.01) s = 0.01;
+      t = t > tm ? tm : t < -tm ? -tm : t;
+      t *= t > 0 ? 1 + BANK : 1 - BANK;
+      var u = M.min(s, 1) * e, i = M.min(e - 1, u | 0), k = u - i, w = WD[i] + (WD[i + 1] - WD[i]) * k;
+      QX = CX[i] + (CX[i + 1] - CX[i]) * k + (NX[i] + (NX[i + 1] - NX[i]) * k) * w * t;
+      QY = CY[i] + (CY[i + 1] - CY[i]) * k + (NY[i] + (NY[i + 1] - NY[i]) * k) * w * t;
+    };
+    var RX2 = new Float32Array(64), RY2 = new Float32Array(64);
+    var ring = function (P, F, A) {
+      // a closed, smoothed outline through body-space points (quadratics between midpoints), added to P
+      var n = A.length / 2;
+      for (var j = 0; j < n; j++) { bmap(F, A[j * 2], A[j * 2 + 1]); RX2[j] = QX; RY2[j] = QY; }
+      P.moveTo((RX2[n - 1] + RX2[0]) / 2, (RY2[n - 1] + RY2[0]) / 2);
+      for (var k = 0; k < n; k++) { var kn = k + 1 < n ? k + 1 : 0; P.quadraticCurveTo(RX2[k], RY2[k], (RX2[k] + RX2[kn]) / 2, (RY2[k] + RY2[kn]) / 2); }
+      P.closePath();
+    };
+    var band = function (F, k) {
+      // the body narrowed to k of its width, tapered shut at the snout: a band down the back
+      var P = new Path2D(), e = F.n - 1;
+      P.moveTo(CX[0], CY[0]);
+      for (var i = 1; i <= e; i++) { var w = WD[i] * k * M.min(1, i / 2) * (1 + BANK); P.lineTo(CX[i] + NX[i] * w, CY[i] + NY[i] * w); }
+      for (var j = e; j >= 1; j--) { var w2 = WD[j] * k * M.min(1, j / 2) * (1 - BANK); P.lineTo(CX[j] - NX[j] * w2, CY[j] - NY[j] * w2); }
+      P.closePath();
+      return P;
+    };
+    var koiFin = function (P, R, F, i, side, len, splay) {
+      // a long rounded fan from the body edge, swept back; its rays drawn into R
+      var bx = CX[i] + NX[i] * WD[i] * 0.72 * side, by = CY[i] + NY[i] * WD[i] * 0.72 * side;
+      var tx = CX[i] - CX[i + 1], ty = CY[i] - CY[i + 1], tl = M.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      var dir = function (a) { var bk = PI - a, cs = M.cos(bk), sn = M.sin(bk) * side; return [tx * cs - ty * sn, tx * sn + ty * cs]; };
+      var d0 = dir(splay + 0.36), d1 = dir(splay - 0.3), dm = dir(splay + 0.05), dl = dir(splay + 0.5), dt2 = dir(splay - 0.42);
+      P.moveTo(bx + tx * len * 0.12, by + ty * len * 0.12);
+      P.quadraticCurveTo(bx + dl[0] * len * 0.55, by + dl[1] * len * 0.55, bx + d0[0] * len * 0.9, by + d0[1] * len * 0.9);
+      P.quadraticCurveTo(bx + dm[0] * len * 1.22, by + dm[1] * len * 1.22, bx + d1[0] * len * 0.82, by + d1[1] * len * 0.82);
+      P.quadraticCurveTo(bx + dt2[0] * len * 0.42, by + dt2[1] * len * 0.42, bx - tx * len * 0.12, by - ty * len * 0.12);
+      P.closePath();
+      for (var r = 0; r < 6; r++) {
+        var dr = dir(splay + 0.3 - r * 0.115), lr = len * (0.86 + 0.1 * M.sin(r / 5 * PI));
+        R.moveTo(bx, by); R.lineTo(bx + dr[0] * lr, by + dr[1] * lr);
+      }
+    };
+    var koiTail = function (P, R, F) {
+      // long and loose: it lags behind the peduncle on a turn, and each lobe lags a little more
+      var e = F.n - 1, bx = CX[e], by = CY[e];
+      var ta = M.atan2(CY[e] - CY[e - 2], CX[e] - CX[e - 2]), lag = M.sin(F.ph - 6.5);
+      ta += lag * clamp(F.amp / F.L * 3.2, 0, 0.55);
+      if (F.tA === null) F.tA = ta;
+      F.tA = wrapA(F.tA + wrapA(ta - F.tA) * 0.2);
+      var A = F.tA, drag = clamp(wrapA(A - ta), -0.5, 0.5), lt = F.L * 0.42, spr = 0.34 + 0.14 * (1 - F.th);
+      var bend = lag * 0.45 - drag * 0.8, w = WD[e] * 1.15, nx = -M.sin(A), ny = M.cos(A);
+      var pt = function (a, l) { return [bx + M.cos(a) * l, by + M.sin(a) * l]; };
+      var X1 = pt(A + spr - bend * 0.25, lt), X2 = pt(A - spr - bend * 0.25, lt * 0.97);
+      var C1 = pt(A + spr * 1.05 - bend, lt * 0.5), C2 = pt(A - spr * 1.05 - bend, lt * 0.5);
+      var Nn = pt(A - bend * 0.3, lt * 0.5), N1 = pt(A + spr * 0.5 - bend * 0.4, lt * 0.82), N2 = pt(A - spr * 0.5 - bend * 0.4, lt * 0.8);
+      P.moveTo(bx + nx * w, by + ny * w);
+      P.quadraticCurveTo(C1[0], C1[1], X1[0], X1[1]);
+      P.quadraticCurveTo(N1[0], N1[1], Nn[0], Nn[1]);
+      P.quadraticCurveTo(N2[0], N2[1], X2[0], X2[1]);
+      P.quadraticCurveTo(C2[0], C2[1], bx - nx * w, by - ny * w);
+      P.closePath();
+      for (var r = -4; r <= 4; r++) {
+        var u = r / 4, ra = A + u * spr * 0.95 - bend * 0.25 * M.abs(u), rl = lt * (0.56 + 0.4 * M.abs(u)), mc = pt(A + u * spr * 0.9 - bend * 0.7, rl * 0.5);
+        R.moveTo(bx, by); R.quadraticCurveTo(mc[0], mc[1], bx + M.cos(ra) * rl, by + M.sin(ra) * rl);
+      }
+    };
     var drawKoi = function (F, al, fa) {
-      var e = F.n - 1, V = F.V, pa = pal.pa * fa, pig = V.pig === "och" ? ochRGB : cinRGB;
-      var body = V.body, finC = body === "och" ? ochRGB : inkRGB, finA = body === "och" ? pa * 0.42 : body === "ink" ? al * 0.5 : al * 0.3;
-      g.fillStyle = rgba(finC, finA);
-      g.beginPath();
-      var tail = tailPath(g, F, 1, 0, 0);
-      var spl = 0.5 + 0.75 * (1 - F.th) + 0.12 * M.sin(F.ph * 0.5), spr = 0.5 + 0.75 * (1 - F.th) + 0.12 * M.sin(F.ph * 0.5 + 1.7), fl = F.L * 0.24;
-      finPath(g, F, 2, 1, fl, spl + clamp(F.w * 0.4, -0.3, 0.3));
-      finPath(g, F, 2, -1, fl, spr - clamp(F.w * 0.4, -0.3, 0.3));
-      finPath(g, F, 6, 1, fl * 0.6, spl * 0.8); finPath(g, F, 6, -1, fl * 0.6, spr * 0.8);
-      g.fill();
-      // body wash
+      var e = F.n - 1, V = F.V, pa = pal.pa * fa, gold = V.body === "och";
+      if (!grainP) grainP = g.createPattern(grainT, "repeat");
+      var hx = CX[0], hy = CY[0], ha = M.atan2(CY[0] - CY[2], CX[0] - CX[2]);
+      // fins and tail: thin washes with fine rays, a slightly firmer wet edge
+      var FP = new Path2D(), RP = new Path2D();
+      koiTail(FP, RP, F);
+      var lagP = M.sin(F.ph * 0.5 - 1.2), fl = F.L * 0.27, tw = clamp(F.w * 0.45, -0.35, 0.35);
+      koiFin(FP, RP, F, 2, 1, fl, 0.55 + 0.7 * (1 - F.th) + 0.14 * lagP + tw);
+      koiFin(FP, RP, F, 2, -1, fl, 0.55 + 0.7 * (1 - F.th) + 0.14 * M.sin(F.ph * 0.5 + 0.5) - tw);
+      koiFin(FP, RP, F, 5, 1, fl * 0.5, 0.6 + 0.5 * (1 - F.th) + 0.1 * lagP);
+      koiFin(FP, RP, F, 5, -1, fl * 0.5, 0.6 + 0.5 * (1 - F.th) - 0.1 * lagP);
+      var finC = gold ? ochRGB : inkRGB, finA = (gold ? pa * 0.3 : al * 0.2) * pal.fn;
+      g.fillStyle = rgba(finC, finA); g.fill(FP);
+      if (!koiLite) { g.lineWidth = 0.7; g.strokeStyle = rgba(finC, finA * 0.9); g.stroke(FP); }
+      g.lineWidth = 0.45; g.strokeStyle = rgba(gold ? ocdRGB : inkRGB, gold ? pa * 0.32 : al * 0.34); g.stroke(RP);
+      // the body: a pale wash, lit along the back and shading off into the flanks
+      var BP = new Path2D(); bodyPath(BP, F, 1, 0, 0);
       var gr = g.createLinearGradient(CX[0], CY[0], CX[e], CY[e]);
-      if (body === "ink") { gr.addColorStop(0, rgba(inkRGB, al * 1.05)); gr.addColorStop(0.45, rgba(inkRGB, al * 0.82)); gr.addColorStop(1, rgba(inkRGB, al * 0.5)); }
-      else if (body === "och") { var ob = pa * pal.ob; gr.addColorStop(0, rgba(ochRGB, ob * 0.78)); gr.addColorStop(0.5, rgba(ochRGB, ob * 0.62)); gr.addColorStop(1, rgba(ochRGB, ob * 0.3)); }
-      else { var wb = al * pal.wb; gr.addColorStop(0, rgba(inkRGB, wb * 1.1)); gr.addColorStop(0.5, rgba(inkRGB, wb * 0.8)); gr.addColorStop(1, rgba(inkRGB, wb * 0.45)); }
-      g.fillStyle = gr;
-      g.beginPath(); bodyPath(g, F, 1, 0, 0); g.fill();
-      // pigment patches, soft-edged, clipped to the body
+      if (gold) {
+        var ob = pa * pal.ob;
+        gr.addColorStop(0, rgba(ochRGB, ob * 0.74)); gr.addColorStop(0.55, rgba(ochRGB, ob * 0.6)); gr.addColorStop(1, rgba(ochRGB, ob * 0.28));
+      } else {
+        var wb = al * pal.wb;
+        gr.addColorStop(0, rgba(inkRGB, wb * 1.05)); gr.addColorStop(0.5, rgba(inkRGB, wb * 0.8)); gr.addColorStop(1, rgba(inkRGB, wb * 0.5));
+      }
+      g.fillStyle = gr; g.fill(BP);
+      if (gold) {
+        // yamabuki: the gold deepens down the spine and pales toward the belly
+        g.fillStyle = rgba(ocdRGB, pa * pal.sp * 1.1); g.fill(band(F, 0.72));
+        g.fillStyle = rgba(ocdRGB, pa * pal.sp * 0.8); g.fill(band(F, 0.38));
+      } else {
+        // white koi: the back catches the light, the flanks keep the ink
+        g.fillStyle = rgba(whRGB, fa * pal.wl * 0.36);
+        g.fill(band(F, 0.8)); if (!koiLite) g.fill(band(F, 0.42));
+      }
+      // pigment, one colour at a time (sumi over cinnabar): a soft bleed, the wash, a darker wet rim where
+      // it dried, a paler heart, then granulation
       var P = F.patch;
-      if (P.length) {
-        g.save();
-        g.beginPath(); bodyPath(g, F, 1, 0, 0); g.clip();
+      for (var pc = 0; pc < 2; pc++) {
+        var CP = null, OP = null, IP = null, XP = null, tv = 0, sumi = pc === 1;
         for (var i = 0; i < P.length; i++) {
-          var p = P[i], u = p[0] * e, i0 = M.min(e - 1, u | 0), t = u - i0;
-          var px = CX[i0] + (CX[i0 + 1] - CX[i0]) * t, py = CY[i0] + (CY[i0 + 1] - CY[i0]) * t, w = WD[i0] + (WD[i0 + 1] - WD[i0]) * t;
-          var cx = px + NX[i0] * w * p[1], cy = py + NY[i0] * w * p[1], rad = F.L * p[2];
-          g.setTransform(dpr, 0, 0, dpr, 0, 0);
-          g.translate(cx, cy); g.rotate(M.atan2(CY[i0] - CY[i0 + 1], CX[i0] - CX[i0 + 1])); g.scale(p[3], 1);
-          var rg = g.createRadialGradient(0, 0, 0, 0, 0, rad);
-          rg.addColorStop(0, rgba(pig, pa)); rg.addColorStop(0.62, rgba(pig, pa * 0.92)); rg.addColorStop(0.84, rgba(pig, pa * 0.45)); rg.addColorStop(1, rgba(pig, 0));
-          g.fillStyle = rg;
-          g.fillRect(-rad, -rad, rad * 2, rad * 2);
+          var p = P[i];
+          if (p.c !== pc) continue;
+          if (!CP) { CP = new Path2D(); OP = new Path2D(); IP = new Path2D(); XP = new Path2D(); tv = p.tv; }
+          ring(CP, F, p.core); if (!koiLite) { ring(OP, F, p.outer); ring(XP, F, p.feath); if (!sumi) ring(IP, F, p.inner); }
         }
-        g.restore();
+        if (!CP) continue;
+        var ca = (sumi ? fa * 0.84 : pa) * 0.93, col = sumi ? sumiRGB : cinRGB;
+        // the bleed: two thin, lopsided washes beyond the edge, feathering out on the side it ran toward
+        if (!koiLite) { g.fillStyle = rgba(col, ca * 0.08); g.fill(XP); g.fillStyle = rgba(col, ca * 0.16); g.fill(OP); }
+        // the wash itself is translucent, so the body's shading shows through, and it pools unevenly down the body
+        var pk = ca * pal.pc * (sumi ? 0.86 : 1), pg = g.createLinearGradient(hx, hy, CX[e], CY[e]);
+        for (var q = 0; q < 5; q++) pg.addColorStop(q / 4, rgba(col, pk * (0.8 + 0.28 * M.sin(q * 2.1 + tv * TAU))));
+        g.fillStyle = pg; g.fill(CP);
+        g.lineWidth = sumi ? 1.1 : 0.9; g.lineJoin = "round"; g.strokeStyle = rgba(sumi ? sumiRGB : cidRGB, ca * (sumi ? 0.24 : 0.32)); g.stroke(CP);
+        if (koiLite) continue;
+        if (!sumi) { g.fillStyle = rgba(whRGB, ca * pal.wl * 0.26); g.fill(IP); }
+        if (grainP && pal.gr > 0) { patTo(grainP, hx, hy, ha, 0.6); g.globalAlpha = sumi ? pal.gr * 0.7 : pal.gr; g.fillStyle = grainP; g.fill(CP); g.globalAlpha = 1; }
       }
-      // a pale koi is drawn by its outline, as on paper
-      if (body !== "ink") {
-        g.strokeStyle = rgba(inkRGB, al * (body === "och" ? 0.3 : 0.5));
-        g.lineWidth = 0.75;
-        g.beginPath(); bodyPath(g, F, 1, 0, 0); g.stroke();
-      }
-      // dorsal ridge and tail rays, fainter than on the ink koi
+      // outline, as on paper
+      g.strokeStyle = rgba(inkRGB, al * (gold ? 0.3 : 0.46));
+      g.lineWidth = 0.75; g.stroke(BP);
+      // dorsal fin: a soft stroke down the back that flops a little with the beat
       g.lineCap = "round";
-      g.strokeStyle = rgba(body === "och" ? ochRGB : inkRGB, body === "och" ? pa * 0.5 : al * (body === "ink" ? 0.55 : 0.24));
-      g.lineWidth = F.L * 0.028;
-      g.beginPath(); g.moveTo(CX[1], CY[1]);
-      for (var s = 2; s < 7; s++) g.quadraticCurveTo(CX[s], CY[s], (CX[s] + CX[s + 1]) / 2, (CY[s] + CY[s + 1]) / 2);
-      g.stroke();
-      g.lineWidth = 0.6;
-      g.strokeStyle = rgba(inkRGB, al * 0.3);
+      g.strokeStyle = rgba(gold ? ocdRGB : inkRGB, gold ? pa * 0.32 : al * 0.2);
+      g.lineWidth = F.L * 0.022;
       g.beginPath();
-      for (var r2 = -1; r2 <= 1; r2 += 0.5) {
-        var ra = tail[2] + r2 * tail[4] * 0.85, rl = tail[3] * (0.62 + 0.3 * M.abs(r2));
-        g.moveTo(tail[0], tail[1]); g.lineTo(tail[0] + M.cos(ra) * rl, tail[1] + M.sin(ra) * rl);
+      var df = M.sin(F.ph - 2.4) * 0.12;
+      for (var s = 3; s <= 6; s++) { var wv = WD[s] * df * (s - 2) / 4, x = CX[s] + NX[s] * wv, y = CY[s] + NY[s] * wv; if (s === 3) g.moveTo(x, y); else g.lineTo(x, y); }
+      g.stroke();
+      // barbels and eyes
+      var fx = M.cos(ha), fy = M.sin(ha), nx0 = -fy, ny0 = fx, bl = F.L * 0.05;
+      g.lineWidth = 0.6; g.strokeStyle = rgba(inkRGB, al * 0.4);
+      g.beginPath();
+      for (var sd = -1; sd <= 1; sd += 2) {
+        var bx0 = CX[0] + fx * F.L * 0.022 + nx0 * WD[0] * 0.5 * sd, by0 = CY[0] + fy * F.L * 0.022 + ny0 * WD[0] * 0.5 * sd;
+        g.moveTo(bx0, by0); g.quadraticCurveTo(bx0 + fx * bl * 0.5 + nx0 * bl * 0.5 * sd, by0 + fy * bl * 0.5 + ny0 * bl * 0.5 * sd, bx0 - fx * bl * 0.15 + nx0 * bl * 0.95 * sd, by0 - fy * bl * 0.15 + ny0 * bl * 0.95 * sd);
       }
       g.stroke();
-      g.fillStyle = rgba(inkRGB, M.min(1, al * 1.9));
+      g.fillStyle = "rgba(" + rgb(pal.eye) + "," + M.min(1, 0.85 * fa).toFixed(3) + ")";
       g.beginPath();
-      var er = M.max(0.8, F.L * 0.013), ex = CX[0] * 0.7 + CX[1] * 0.3, ey = CY[0] * 0.7 + CY[1] * 0.3, ew = WD[1] * 0.62;
+      var er = M.max(0.8, F.L * 0.012), ex = CX[0] * 0.62 + CX[1] * 0.38, ey = CY[0] * 0.62 + CY[1] * 0.38, ew = WD[1] * 0.7;
       g.moveTo(ex + NX[0] * ew + er, ey + NY[0] * ew); g.arc(ex + NX[0] * ew, ey + NY[0] * ew, er, 0, TAU);
       g.moveTo(ex - NX[0] * ew + er, ey - NY[0] * ew); g.arc(ex - NX[0] * ew, ey - NY[0] * ew, er, 0, TAU);
       g.fill();
@@ -641,7 +802,7 @@
           var rk = r0 - wk * (14 + r0 * 0.07);
           if (rk < 2) break;
           var ak = en * [1, 0.55, 0.28][wk] / (1 + rk / 110);
-          if (ak > 0.004) fronts.push({ x: rp.x, y: ry, r: rk, b: 8 + rk * 0.06, a: ak });
+          if (ak > 0.004) fronts.push({ x: rp.x, y: ry, r: rk, b: 8 + rk * 0.06, a: ak, w: [1, 0.8, 0.62][wk], q: rp.q });
         }
       }
       sg.setTransform(1, 0, 0, 1, 0, 0);
@@ -735,12 +896,15 @@
       if (fronts.length) {
         g.lineCap = "butt";
         for (var fq = 0; fq < fronts.length; fq++) {
-          var W0 = fronts[fq], lw = 1 + W0.r * 0.007;
-          g.lineWidth = lw;
+          var W0 = fronts[fq], lw = (1 + W0.r * 0.007) * W0.w, qx = M.cos(W0.q) * lw * 0.45, qy = M.sin(W0.q) * lw * 0.45;
+          // two hairlines a little off-centre from each other: the ring thickens on one side, thins on the other
+          g.lineWidth = lw * 0.7;
           g.strokeStyle = "rgba(" + rsRGB + "," + (W0.a * pal.rsa).toFixed(4) + ")";
-          g.beginPath(); g.arc(W0.x, W0.y, M.max(0.5, W0.r - lw * 0.6), 0, TAU); g.stroke();
+          g.beginPath(); g.arc(W0.x, W0.y, M.max(0.5, W0.r - lw * 0.55), 0, TAU); g.stroke();
+          g.beginPath(); g.arc(W0.x + qx, W0.y + qy, M.max(0.5, W0.r - lw * 0.75), 0, TAU); g.stroke();
+          g.lineWidth = lw;
           g.strokeStyle = "rgba(" + rhRGB + "," + (W0.a * pal.rha).toFixed(4) + ")";
-          g.beginPath(); g.arc(W0.x, W0.y, W0.r + lw * 0.6, 0, TAU); g.stroke();
+          g.beginPath(); g.arc(W0.x - qx * 0.6, W0.y - qy * 0.6, W0.r + lw * 0.6, 0, TAU); g.stroke();
         }
       }
       // obstacles stay clean
@@ -774,7 +938,8 @@
       // drop to 1 device pixel per CSS pixel, once
       if (O.adaptive && !RM.matches && now - last < 100 && dprCap > 1) {
         fema = fema * 0.96 + (now - last) * 0.04;
-        if (++fcount > 60 && fema > 21 && dpr > 1) { dprCap = 1; measure(); }
+        // the same signal also lightens the koi (no bleed, heart, grain or fin outlines)
+        if (++fcount > 60 && fema > 21 && dpr > 1) { dprCap = 1; koiLite = true; measure(); }
       }
       last = now;
       svel = page ? svel * 0.85 + ((sy - lastSy) / M.max(dt, 1 / 240)) * 0.15 : 0; lastSy = sy;
