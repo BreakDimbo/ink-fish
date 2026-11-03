@@ -370,7 +370,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.62, 0.66, 0.7], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.45, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.11, qamb: 1.1 }
+            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.55, qfr: 2.3, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.14, qamb: 1.1 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,

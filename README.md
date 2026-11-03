@@ -102,6 +102,8 @@ v1.3 新增的 `water` 默认关闭，不开时外观与 v1.2.1 完全相同；�
 
 性能参考（在 zh-blog-mirrors 首页实测）：平均约 0.6 ms/帧；1440px 宽时 57 条鱼，390px 宽时 30 条。演示页（固定水池 + 锦鲤 + 波纹，headless Chromium）：1440px 约 0.8 ms/帧（58 条），390px 约 0.5 ms/帧（31 条）；锦鲤与波纹合计约 +0.2 ms/帧（帧持续偏慢时 `adaptive` 会同时简化锦鲤）。滚动测试：4× CPU 降速、1440px 时平均帧间隔从 47.6 ms 降到 19.6 ms，长任务从 69 个降到 0。
 
+v1.3 真水（`water: "real"`）：不开时与 v1.2.1 持平（1440px、4× CPU 滚动，晚帧 5–9% 对 6–7%，库内 ~2.8–2.9 ms/帧）。开启后多出的主要是 GPU 开销：每帧四个 pass，并把两张 2D 画布上传为纹理。本机测试环境没有 GPU，headless Chrome 用 SwiftShader 在 CPU 上软件光栅化 WebGL，强制开启时 1440px 约 150 ms/帧、390px 约 41 ms/帧，这个数字不代表真实显卡，只能说明软件渲染下跑不动；`adaptive`（默认开）会在约 30 帧内退回扁平水面，之后与 v1.2.1 基本相同。详见 `qa/demo-r6/perf.md`。
+
 ## 浏览器支持
 
 需要 Canvas 2D、`requestAnimationFrame`、`ResizeObserver`、`MutationObserver`、`matchMedia().addEventListener`（局部水池模式另需 `IntersectionObserver`）。即当前的 Chrome / Edge / Firefox，以及 Safari 14+ / iOS 14+。不支持 Canvas 的环境下 `mount()` 返回 `null`，页面不受影响。`water: "real"` 另需 WebGL2 与 `EXT_color_buffer_float`，缺少时自动用平面水。打印时隐藏。演示页已在无头 Chromium 中验证。
@@ -213,6 +215,8 @@ The returned instance: `{ canvas, stats, fish, running, water, layout(), set(opt
 - **Reduced motion.** Under `prefers-reduced-motion` the fish barely drift and the canvas redraws about 10 times a second; there are no ripples, and real water falls back to the flat water.
 
 Performance, measured on the zh-blog-mirrors homepage: about 0.6 ms per frame on average; 57 fish at 1440px wide, 30 at 390px. On the demo page (fixed pond + koi + ripples, headless Chromium): ~0.8 ms/frame at 1440px (58 fish), ~0.5 ms/frame at 390px (31); koi and ripples together add ~0.2 ms/frame (when frames keep arriving late, `adaptive` also lightens the koi). In a scroll test at 1440px with a 4× CPU throttle, the mean frame interval went from 47.6 ms (v1.0 demo) to 19.6 ms and long tasks from 69 to 0.
+
+v1.3 real water (`water: "real"`): off, it matches v1.2.1 (1440px, 4× CPU, scrolling: 5–9% late frames against 6–7%, ~2.8–2.9 ms/frame in the library). On, the added cost is mostly GPU: four passes a frame, plus uploading the two 2D canvases as textures. The test box has no GPU, so headless Chrome rasterises WebGL on the CPU with SwiftShader. Forced on, that gives ~150 ms/frame at 1440px and ~41 ms/frame at 390px. Those numbers say nothing about a real graphics card, only that software rendering cannot keep up. `adaptive` (on by default) falls back to the flat water within about 30 frames, and from then on it performs like v1.2.1. See `qa/demo-r6/perf.md`.
 
 ### Browser support
 

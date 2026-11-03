@@ -381,7 +381,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
         <div><b>58</b><span class="caps">fish at 1440px</span></div>
         <div><b>31</b><span class="caps">fish at 390px</span></div>
       </div>
-      <p class="measure-note">Measured on this page with the fixed pond, koi and ripples on (headless Chromium); koi and ripples together add about 0.2&thinsp;ms.</p>
+      <p class="measure-note">Measured on this page with the fixed pond, koi and ripples on (headless Chromium); koi and ripples together add about 0.2&thinsp;ms. Real water is mostly GPU work and is not counted here; on a device too slow for it, <code>adaptive</code> falls back to the flat water.</p>
     </div>
   </section>
 </main>
