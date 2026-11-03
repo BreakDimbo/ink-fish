@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ink-fish · 水墨游鱼 — demo</title>
+<meta name="description" content="Brush-ink fish swimming behind your page. One Canvas 2D, no dependencies, no build step.">
+<meta name="color-scheme" content="light dark">
+<script>
+  // pick the theme before first paint: ?theme=dark|light, else the system preference
+  (function () {
+    var t = (location.search.match(/[?&]theme=(light|dark)/) || [])[1];
+    try { t = t || localStorage.getItem("ink-fish-demo-theme"); } catch (e) {}
+    if (t) document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="stylesheet" href="src/ink-fish.css">
+<style>
+  :root{--bg:#f1ece3;--ink:#1e1c19;--mute:#7a7268;--rule:#d9d1c3;--card:#fbf8f2}
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#12110e;--ink:#e8e2d8;--mute:#958d82;--rule:#2c2924;--card:#1b1814}}
+  :root[data-theme=dark]{--bg:#12110e;--ink:#e8e2d8;--mute:#958d82;--rule:#2c2924;--card:#1b1814}
+  *{box-sizing:border-box}
+  html{background:var(--bg);color:var(--ink);transition:background .5s,color .5s}
+  body{margin:0;font:16px/1.65 ui-serif,"Songti SC","Noto Serif SC",Georgia,serif;min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+  .top{display:flex;justify-content:space-between;align-items:center;padding:22px 0;font:13px/1 ui-monospace,Menlo,monospace;color:var(--mute);letter-spacing:.04em}
+  .top a{color:inherit}
+  button{font:inherit;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:999px;padding:7px 14px;cursor:pointer}
+  button:hover{border-color:var(--mute)}
+  header.hero{padding:9vh 0 200px}
+  .eyebrow{font:12px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin:0 0 18px}
+  h1{font-size:clamp(40px,7vw,84px);line-height:1.02;margin:0 0 22px;font-weight:600;letter-spacing:-.01em}
+  .intro{max-width:36em;font-size:18px;margin:0;color:var(--ink)}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:26px 0 0;font-size:14px;color:var(--mute)}
+  .controls label{display:inline-flex;gap:6px;align-items:center}
+  select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:4px 6px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:30px 90px;margin:0 0 120px}
+  .card{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;min-height:150px}
+  .card h3{margin:0 0 6px;font-size:17px}
+  .card p{margin:0;font-size:14px;color:var(--mute)}
+  .card code{font:12.5px ui-monospace,Menlo,monospace}
+  h2{font-size:24px;margin:0 0 12px}
+  .pond{height:320px;border:1px solid var(--rule);border-radius:14px;background:var(--card);display:flex;align-items:flex-end;padding:18px 20px;margin:14px 0 40px}
+  .pond p{margin:0;font-size:14px;color:var(--mute)}
+  pre{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;overflow:auto;font:13px/1.55 ui-monospace,Menlo,monospace}
+  footer{font-size:13px;color:var(--mute);padding-top:40px}
+  footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <span>ink-fish · 水墨游鱼</span>
+    <span><a href="https://github.com/BreakDimbo/ink-fish">GitHub</a> &nbsp; <button id="theme" type="button" aria-label="Toggle light / dark">☾ / ☀</button></span>
+  </div>
+  <header class="hero">
+    <p class="eyebrow">Canvas 2D · no dependencies · no build step</p>
+    <h1>水墨游鱼<br>ink-fish</h1>
+    <p class="intro">Brush-ink fish swimming in the paper behind your page. Move the cursor slowly and the curious ones come to look; flick it and they scatter; click in open water to startle them. 鼠标慢慢移动，好奇的鱼会游过来；快速一划，它们四散；点击空白处会惊走附近的鱼。</p>
+    <div class="controls">
+      <label>fish <select id="count"><option value="auto">auto</option><option value="12">12</option><option value="30">30</option><option value="60">60</option><option value="100">100</option></select></label>
+      <label><input type="checkbox" id="rm"> calm (reduced motion)</label>
+      <label><input type="checkbox" id="sh" checked> shadows</label>
+    </div>
+  </header>
+
+  <section class="grid" aria-label="Obstacles">
+    <div class="card"><h3>Obstacles</h3><p>These cards are passed as <code>obstacles</code>: carp and koi swim around them and the canvas is erased underneath.</p></div>
+    <div class="card"><h3>Ink under text</h3><p>The headline and intro are passed as <code>text</code>, so ink thins where it crosses them.</p></div>
+    <div class="card"><h3>Three depths</h3><p>Far minnows, mid carp, near koi — each layer has its own scroll parallax and soft lamp shadow.</p></div>
+    <div class="card"><h3>Burst &amp; glide</h3><p>A body wave runs head to tail; the tail beat follows speed and thrust.</p></div>
+    <div class="card"><h3>Light / dark</h3><p>Follows <code>prefers-color-scheme</code> or <code>&lt;html data-theme&gt;</code>; try the toggle above.</p></div>
+    <div class="card"><h3>Cheap</h3><p>One canvas, one rAF loop, paused when nothing is visible.</p></div>
+  </section>
+
+  <h2>Element mode · 局部水池</h2>
+  <div class="pond" id="pond"><p>Mounted on this box with <code>InkFish.mount(pond, { count: 14 })</code>. It pauses while scrolled out of view.</p></div>
+
+  <h2>Usage</h2>
+<pre>&lt;link rel="stylesheet" href="src/ink-fish.css"&gt;
+&lt;script src="src/ink-fish.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  var fish = InkFish.mount(document.body, { obstacles: ".card", text: "h1, .intro" });
+  // fish.set({ theme: "dark" });  fish.destroy();
+&lt;/script&gt;</pre>
+  <footer>MIT © 2026 BreakDimbo · extracted from the <a href="https://github.com/BreakDimbo/zh-blog-mirrors">zh-blog-mirrors</a> homepage.</footer>
+</div>
+
+<script src="src/ink-fish.js"></script>
+<script>
+  var page = InkFish.mount(document.body, {
+    habitat: ".wrap",
+    hero: "header.hero",
+    title: "header.hero h1",
+    obstacles: ".grid .card, .pond, pre",
+    text: [
+      { selector: ".eyebrow", keep: 0.3, feather: 30 },
+      { selector: "header.hero h1", keep: 0.16, feather: 44 },
+      { selector: ".intro", keep: 0.24, feather: 34 },
+      { selector: ".controls", keep: 0.26, feather: 28 },
+      { selector: ".top > *", keep: 0.3, feather: 24 },
+      { selector: "h2, footer", keep: 0.24, feather: 30 }
+    ]
+  });
+  var pond = InkFish.mount(document.getElementById("pond"), { count: 14, text: { selector: ".pond p", keep: 0.3, feather: 24 } });
+  var both = function (o) { if (page) page.set(o); if (pond) pond.set(o); };
+
+  document.getElementById("theme").addEventListener("click", function () {
+    var r = document.documentElement, cur = r.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = cur === "dark" ? "light" : "dark";
+    r.setAttribute("data-theme", next); // ink-fish watches <html data-theme> and cross-fades its ink
+    try { localStorage.setItem("ink-fish-demo-theme", next); } catch (e) {}
+  });
+  document.getElementById("count").addEventListener("change", function (e) { if (page) page.set({ count: e.target.value === "auto" ? "auto" : +e.target.value }); });
+  document.getElementById("rm").addEventListener("change", function (e) { both({ reducedMotion: e.target.checked ? true : "auto" }); });
+  document.getElementById("sh").addEventListener("change", function (e) { both({ shadow: e.target.checked ? 1 : 0 }); });
+</script>
+</body>
+</html>
