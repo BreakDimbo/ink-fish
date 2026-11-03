@@ -80,7 +80,7 @@
     var S = 6e-4, G = 9.81, SR = 7.4e-5;   // metres per CSS px; g; σ/ρ
     var SLOW = 0.22, ASLOW = 0.1;           // slow motion of the rings, of the ambient swell
     var NU = 6e-6;                          // kinematic viscosity, ×6 for a pond's surface film
-    var SRC = 7, NK = 192, NR = 512, RMAX = 640, SLOTS = 8, SIM = 0.5, GRID = 4;
+    var SRC = 7, NK = 192, NR = 512, RMAX = 640, SLOTS = 8, SIM = 0.5;
     var DK = 4.2 / SRC / NK, KP = new Float32Array(NK), W = new Float32Array(NK), VD = new Float32Array(NK);
     for (var i = 0; i < NK; i++) { var kp = (i + 0.5) * DK, km = kp / S; KP[i] = kp; W[i] = Math.sqrt(G * km + SR * km * km * km); VD[i] = 2 * NU * km * km; }
     // Bessel J0, J1: Abramowitz & Stegun 9.4.1–9.4.6 (|error| < 1e-7)
@@ -137,19 +137,26 @@
       "void main(){vec2 uv=mix(vec2(-E),vec2(1.+E),a);vec2 s=bs(uv).yz;vec2 p=vec2(uv.x,1.-uv.y)*vp,q=p+D*s;o0=p;" +
       "gl_Position=vec4(q.x/vp.x*2.-1.,1.-q.y/vp.y*2.,0.,1.);}";
     var FS_CAU = HEAD + "in vec2 o0;uniform float px;out vec4 o;void main(){vec2 x=dFdx(o0),y=dFdy(o0);o=vec4(min(abs(x.x*y.y-x.y*y.x)/px,10.),0.,0.,1.);}";
-    // composite (caustics softened by the sky's penumbra): refracted fish over the refracted shadow on the caustic-lit floor, then the reflection.
+    // the sky is not a point: its penumbra blurs the floor light by about depth × its angular size (half resolution)
+    var FS_BLUR = HEAD + "uniform sampler2D C;uniform vec2 cb;in vec2 v;out vec4 o;float cl(vec2 u){return min(texture(C,u).r,2.5);}" +
+      "void main(){o=vec4(.4*cl(v)+.15*(cl(v+cb)+cl(v-cb)+cl(v+vec2(cb.x,-cb.y))+cl(v-vec2(cb.x,-cb.y))),0.,0.,1.);}";
+    // composite: refracted fish over the refracted shadow on the caustic-lit floor, then the reflection.
+    // Refraction never reaches past the canvas (no smeared edge texels). Steep facets also catch the brighter
+    // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
+    // dither of ±½ step keeps the smooth light from banding in 8 bits.
     // Output is premultiplied "multiply the paper by (1−a), then add rgb", so the page shows through.
-    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,C;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2;uniform vec2 ld,cb;in vec2 v;out vec4 o;" +
-      "float cl(vec2 u){return min(texture(C,u).r,2.5);}" +
+    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2;uniform vec2 ld;in vec2 v;out vec4 o;" +
+      "float inb(vec2 u){return step(0.,min(min(u.x,u.y),1.-max(u.x,u.y)));}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec4 w=texture(Wt,v);vec2 s=w.yz;float m=w.w;" +
-      "vec4 f=texture(Fi,(p+k1.x*s)/vp);float sh=texture(Sh,(p+k1.y*s)*ss).a;" +
-      "float c=.4*cl(v)+.15*(cl(v+cb)+cl(v-cb)+cl(v+vec2(cb.x,-cb.y))+cl(v-vec2(cb.x,-cb.y)));" +
+      "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
+      "float c=texture(B,v).r;" +
       "float L=1.+(c-1.)*k1.z*m,e=(1.-sh)*L;" +
       "float mul=min(e,1.);vec3 add=lit*max(e-1.,0.)+ins*sh*k2.y;" +
       "add=add*(1.-f.a)+f.rgb*tr+ins*f.a*k2.x;mul*=1.-f.a;" +
       "vec3 n=normalize(vec3(-s,1.));float F=.02+.98*pow(1.-n.z,5.);vec2 r=2.*n.z*n.xy;" +
-      "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m;add+=sky*max(q,0.);mul*=1.+min(q,0.);" +
-      "o=vec4(add,1.-mul);}";
+      "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.25)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
+      "float d=(fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5)/255.;" +
+      "o=vec4(add+d,1.-mul+d);}";
 
     function create(D) {
       var c = D.createElement("canvas"), gl = null;
@@ -164,8 +171,8 @@
         for (var i = 0; i < n; i++) { var nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, ""); u[nm] = gl.getUniformLocation(p, nm); }
         return { p: p, u: u };
       };
-      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Po = prog(VS_FULL, FS_COMP);
-      if (!Pp || !Ps || !Pc || !Po) return null;
+      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP);
+      if (!Pp || !Ps || !Pc || !Pb || !Po) return null;
       var tex = function (fmt, w, h, filt, type, data, f2) {
         var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
@@ -180,7 +187,8 @@
       var tP = tex(gl.RGBA16F, NR, SLOTS, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fP = fbo(tP);
       var tW = tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fW = fbo(tW);
       var tC = tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fC = fbo(tC);
-      if (!fP || !fW || !fC) return null;
+      var tB = tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fB = fbo(tB);
+      if (!fP || !fW || !fC || !fB) return null;
       var tFi = tex(0, 0, 0, gl.LINEAR), tSh = tex(0, 0, 0, gl.LINEAR);
       var tri = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, tri); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       var vaoT = gl.createVertexArray(); gl.bindVertexArray(vaoT); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -197,22 +205,30 @@
         AW.push({ kx: Math.cos(dir) * k, ky: Math.sin(dir) * k, amp: (0.0042 + Math.random() * 0.003) / k, w: Math.sqrt(G * km + SR * km * km * km) * ASLOW, ph: Math.random() * 6.283 });
       }
       var Fd = new Float32Array(NK * SLOTS), Iu = new Float32Array(SLOTS * 4), Ru = new Float32Array(128), Ku = new Float32Array(128);
-      var W_ = 0, H_ = 0, sw = 0, shh = 0, fw = 0, fh = 0, shw = 0, shH = 0, lost = false, hadRings = true;
+      var W_ = 0, H_ = 0, sw = 0, shh = 0, lost = false, hadRings = true, Q = 0, RS = [0, 0, 0, 0];
+      // the surface and its caustics are re-simulated only when something moved them: every frame while rings
+      // live, on scroll or a layout change, else at ~30 Hz for the slow ambient swell (simT, simK)
+      var simT = -9, simK = NaN, work = { comp: 0, sim: 0, cau: 0, prof: 0, up: 0 };
       c.addEventListener("webglcontextlost", function (e) { e.preventDefault(); lost = true; api.onlost && api.onlost(); });
+      // quality 0: the device pixels of the 2D canvas, a caustic vertex every 6 CSS px; 1 (a slow GPU): 1 px per CSS px, every 8
       var resize = function (cssW, cssH, pw, ph) {
+        RS = [cssW, cssH, pw, ph];
+        if (Q) { pw = Math.max(1, Math.round(cssW)); ph = Math.max(1, Math.round(cssH)); }
         if (cssW === W_ && cssH === H_ && pw === c.width && ph === c.height) return;
+        var grid = Q ? 8 : 6;
         W_ = cssW; H_ = cssH; c.width = pw; c.height = ph; c.style.width = cssW + "px"; c.style.height = cssH + "px";
         sw = Math.max(2, Math.ceil(cssW * SIM)); shh = Math.max(2, Math.ceil(cssH * SIM));
-        [tW, tC].forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, shh, 0, gl.RGBA, gl.HALF_FLOAT, null); });
-        // the caustic grid: one vertex per GRID CSS px, reaching 4% past each edge
-        var E = 0.04, nx = Math.ceil(cssW * (1 + 2 * E) / GRID) + 1, ny = Math.ceil(cssH * (1 + 2 * E) / GRID) + 1;
+        [tW, tC, tB].forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, shh, 0, gl.RGBA, gl.HALF_FLOAT, null); });
+        // the caustic grid reaches 4% past each edge
+        var E = 0.04, nx = Math.ceil(cssW * (1 + 2 * E) / grid) + 1, ny = Math.ceil(cssH * (1 + 2 * E) / grid) + 1;
         var V = new Float32Array(nx * ny * 2), Ix = new Uint32Array((nx - 1) * (ny - 1) * 6), n = 0;
         for (var y = 0; y < ny; y++) for (var x = 0; x < nx; x++) { V[(y * nx + x) * 2] = x / (nx - 1); V[(y * nx + x) * 2 + 1] = y / (ny - 1); }
         for (var yy = 0; yy < ny - 1; yy++) for (var xx = 0; xx < nx - 1; xx++) { var i0 = yy * nx + xx; Ix[n++] = i0; Ix[n++] = i0 + 1; Ix[n++] = i0 + nx; Ix[n++] = i0 + 1; Ix[n++] = i0 + nx + 1; Ix[n++] = i0 + nx; }
-        gN = n;
+        gN = n; gV = nx * ny; simK = NaN;
         gl.bindVertexArray(vaoG); gl.bindBuffer(gl.ARRAY_BUFFER, gB); gl.bufferData(gl.ARRAY_BUFFER, V, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gI); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Ix, gl.STATIC_DRAW); gl.bindVertexArray(null);
       };
+      var gV = 0;
       var upload = function (t, src, wh) {
         gl.bindTexture(gl.TEXTURE_2D, t);
         if (wh[0] !== src.width || wh[1] !== src.height) { wh[0] = src.width; wh[1] = src.height; gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
@@ -226,59 +242,68 @@
         gl.disable(gl.BLEND);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
         upload(tFi, fishC, szF); upload(tSh, shC, szS);
-        // 1 · ring profiles (only while rings are alive)
-        var nI = 0; Iu.fill(0);
+        work.up = fishC.width * fishC.height + shC.width * shC.height; work.prof = work.sim = work.cau = 0;
+        // 1 · ring profiles, one row per live ring
+        var nI = 0;
         for (var i = 0; i < rings.length && nI < SLOTS; i++) {
           var R0 = rings[i], env = Math.min(1, R0.t / 0.5), life = R0.life;
           env *= env * (3 - 2 * env) * (R0.t > life - 1.4 ? Math.max(0, (life - R0.t) / 1.4) : 1);
-          if (env <= 0) continue;
+          if (env <= 0 || !(R0.s > 0)) continue;
           spec(R0.t, NORM * R0.s * look.ring * env, Fd, nI * NK);
           Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = 1; nI++;
         }
-        if (nI || hadRings) {
-          for (var z = nI; z < SLOTS; z++) Fd.fill(0, z * NK, z * NK + NK);
-          gl.bindTexture(gl.TEXTURE_2D, tF); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NK, SLOTS, gl.RED, gl.FLOAT, Fd);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fP); gl.viewport(0, 0, NR, SLOTS); gl.useProgram(Pp.p);
+        for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 2] = 0;
+        if (nI) {
+          gl.bindTexture(gl.TEXTURE_2D, tF); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NK, nI, gl.RED, gl.FLOAT, Fd);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fP); gl.viewport(0, 0, NR, nI); gl.useProgram(Pp.p);
           bindT(Pp, "J", 0, tJ); bindT(Pp, "F", 1, tF);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          work.prof = NR * nI;
+        }
+        // 2 · the surface, 3 · caustics, their penumbra: only when something moved them
+        var nR = Math.min(32, rects.n != null ? rects.n : rects.length), key = sy + look.amb * 7 + look.cd * 13 + look.cb * 17 + nR * 19;
+        for (var q = 0; q < nR; q++) { var b = rects[q]; key += b.l * 3 + b.t * 5 + b.r * 7 + b.b * 11 + b.keep; Ru[q * 4] = b.l; Ru[q * 4 + 1] = b.t; Ru[q * 4 + 2] = b.r; Ru[q * 4 + 3] = b.b; Ku[q * 4] = b.keep; Ku[q * 4 + 1] = Math.max(1, b.f); }
+        if (nI || hadRings || key !== simK || T - simT >= 1 / 31 || T < simT) {
+          simT = T; simK = key;
+          for (var a = 0; a < 16; a++) {
+            var w = AW[a], ph = (w.w * T + w.ph - w.ky * sy) % 6.283185;
+            AMB[a * 4] = w.kx; AMB[a * 4 + 1] = w.ky; AMB[a * 4 + 2] = w.amp * look.amb; AMB[a * 4 + 3] = ph;
+          }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
+          bindT(Ps, "P", 0, tP);
+          gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
+          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR);
+          gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
+          gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+          gl.useProgram(Pc.p); bindT(Pc, "Wt", 0, tW);
+          gl.uniform2f(Pc.u.ws, sw, shh); gl.uniform2f(Pc.u.vp, W_, H_); gl.uniform1f(Pc.u.D, look.cd); gl.uniform1f(Pc.u.E, 0.04);
+          gl.uniform1f(Pc.u.px, (W_ / sw) * (H_ / shh));
+          gl.bindVertexArray(vaoG); gl.drawElements(gl.TRIANGLES, gN, gl.UNSIGNED_INT, 0);
+          gl.disable(gl.BLEND);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fB); gl.viewport(0, 0, sw, shh); gl.useProgram(Pb.p);
+          bindT(Pb, "C", 0, tC); gl.uniform2f(Pb.u.cb, look.cb / W_, look.cb / H_);
+          gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          work.sim = sw * shh * 2; work.cau = gV;
         }
         hadRings = nI > 0;
-        // 2 · the surface
-        for (var a = 0; a < 16; a++) {
-          var w = AW[a], ph = (w.w * T + w.ph - w.ky * sy) % 6.283185;
-          AMB[a * 4] = w.kx; AMB[a * 4 + 1] = w.ky; AMB[a * 4 + 2] = w.amp * look.amb; AMB[a * 4 + 3] = ph;
-        }
-        var nR = Math.min(32, rects.n != null ? rects.n : rects.length);
-        for (var q = 0; q < nR; q++) { var b = rects[q]; Ru[q * 4] = b.l; Ru[q * 4 + 1] = b.t; Ru[q * 4 + 2] = b.r; Ru[q * 4 + 3] = b.b; Ku[q * 4] = b.keep; Ku[q * 4 + 1] = Math.max(1, b.f); }
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
-        bindT(Ps, "P", 0, tP);
-        gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
-        gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR);
-        gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
-        // 3 · caustics
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
-        gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-        gl.useProgram(Pc.p); bindT(Pc, "Wt", 0, tW);
-        gl.uniform2f(Pc.u.ws, sw, shh); gl.uniform2f(Pc.u.vp, W_, H_); gl.uniform1f(Pc.u.D, look.cd); gl.uniform1f(Pc.u.E, 0.04);
-        gl.uniform1f(Pc.u.px, (W_ / sw) * (H_ / shh));
-        gl.bindVertexArray(vaoG); gl.drawElements(gl.TRIANGLES, gN, gl.UNSIGNED_INT, 0);
-        gl.disable(gl.BLEND);
         // 4 · composite
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, c.width, c.height); gl.useProgram(Po.p);
-        bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "C", 3, tC);
+        bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
         gl.uniform2f(Po.u.vp, W_, H_); gl.uniform2f(Po.u.ss, SHs / shC.width, SHs / shC.height);
         gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
-        gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, 0, look.sg);
+        gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg);
         gl.uniform2f(Po.u.ld, -0.6, -0.8);
-        // a soft sky is not a point: its penumbra blurs the floor light by about depth × its angular size
-        gl.uniform2f(Po.u.cb, look.cb / W_, look.cb / H_);
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
+        work.comp = c.width * c.height;
       };
       var api = {
-        canvas: c, resize: resize, draw: draw,
+        canvas: c, resize: resize, draw: draw, work: work,
         get lost() { return lost; },
+        get quality() { return Q; },
+        setQuality: function (q) { q = q ? 1 : 0; if (q === Q) return; Q = q; W_ = -1; resize(RS[0], RS[1], RS[2], RS[3]); },
         destroy: function () { var x = gl.getExtension("WEBGL_lose_context"); if (x) x.loseContext(); if (c.parentNode) c.parentNode.removeChild(c); }
       };
       return api;
@@ -370,13 +395,13 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.62, 0.66, 0.7], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.55, qfr: 2.3, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.14, qamb: 1.1 }
+            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.55, qfr: 2.3, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.14, qamb: 1.1, qhz: 0 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.14, qfr: 1.3, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.11, qamb: 1.1 };
+            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.14, qfr: 1.3, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.11, qamb: 1.1, qhz: 0 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
@@ -624,14 +649,21 @@
     var L_ = []; // listeners to remove on destroy
     var on = function (t, ev, fn, o) { t.addEventListener(ev, fn, o); L_.push([t, ev, fn, o]); };
     // ── water rings: a few at a time, spawned by distance and time, never per mousemove ──
-    var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 3.6, RIP_MAX = 5, fronts = [];
+    var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 3.6, RIP_MAX = 5, fronts = [], wakeN = 0;
     var ripLife = function () { return realLive ? WATER.life : RIP_LIFE; };
     var rpz = function () { return page && !O.fixed ? 1 : 0; }; // in parallax mode the rings ride on the page
-    var addRipple = function (x, y, s) {
-      if (!O.ripples || RM.matches) return;
-      if (rip.length >= (realLive ? 8 : RIP_MAX)) rip.shift();
-      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s, q: rnd(0, TAU), life: ripLife() });
+    // the surface holds about one firm ring's worth of disturbance (Σ strength × envelope ≤ RIP_SUM); past
+    // RIP_MAX rings the oldest is retired over 0.8 s, never cut. A click may exceed the budget; a move may not.
+    var RIP_SUM = 1.05;
+    var ripLoad = function () { var u = 0; for (var i = 0; i < rip.length; i++) { var r = rip[i]; if (!r.die) u += r.s * r.e * M.max(0, 1 - r.t / r.life); } return u; };
+    var addRipple = function (x, y, s, firm) {
+      if (!O.ripples || RM.matches) return false;
+      if (!firm) { s = M.min(s, RIP_SUM - ripLoad()); if (s < 0.12) return false; }
+      var live = 0;
+      for (var i = rip.length - 1; i >= 0; i--) if (!rip[i].die && ++live >= RIP_MAX) rip[i].die = 1;
+      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s, e: 1, q: rnd(0, TAU), life: ripLife() });
       wake();
+      return true;
     };
     var kick = function (f, k) { f.mode = 1; f.tm = rnd(0.35, 0.6); f.thT = M.max(f.thT, k); };
     var inside = function (x, y) { return page || (x >= 0 && y >= 0 && x <= vw && y <= vh); };
@@ -644,8 +676,14 @@
       ptr.sp = ptr.sp * 0.7 + sp * 0.3; ptr.x = cx; ptr.y = cy; ptr.t = now; ptr.idle = 0;
       ptr.on = inside(cx, cy) && free(cx, cy + sy, 6);
       if (ptr.on && O.ripples) {
-        var rd = hyp(cx - ripLast.x, cy - ripLast.y);
-        if (rd > 120 && now - ripLast.t > 340) { addRipple(cx, cy, clamp(0.34 + ptr.sp / 4200, 0.34, 0.62)); ripLast.x = cx; ripLast.y = cy; ripLast.t = now; }
+        // slow moves leave delicate rings ~130 px apart; a quick pass becomes one calm wake: sparser sources,
+        // each weaker than the last, which interfere into a single train behind the cursor
+        var rd = hyp(cx - ripLast.x, cy - ripLast.y), fw = clamp((ptr.sp - 450) / 900, 0, 1);
+        if (now - ripLast.t > 700 || ptr.sp < 300) wakeN = 0;
+        if (rd > 130 + 190 * fw && now - ripLast.t > 380 - 180 * fw) {
+          var s0 = fw > 0 ? 0.46 * M.pow(0.62, wakeN) : clamp(0.28 + ptr.sp / 3600, 0.28, 0.4);
+          if (addRipple(cx, cy, s0)) { if (fw > 0) wakeN++; ripLast.x = cx; ripLast.y = cy; ripLast.t = now; }
+        }
       }
       wake();
     }, { passive: true });
@@ -660,7 +698,7 @@
       if (RM.matches || (sel && t && t.closest && t.closest(sel))) return;
       var o = origin(), x = e.clientX - o[0], y = e.clientY - o[1];
       if (!inside(x, y) || !free(x, y + sy, 4)) return;
-      addRipple(x, y, 1); // a single, slightly stronger ring (touch: ripples on tap only)
+      addRipple(x, y, 1, true); // a single, slightly stronger ring (touch: ripples on tap only)
       ripLast.x = x; ripLast.y = y; ripLast.t = performance.now();
       for (var i = 0; i < fish.length; i++) {
         var f = fish[i], dx = f.x - x, dy = f.y - sy * f.pz - y, d = hyp(dx, dy);
@@ -671,12 +709,15 @@
 
     // ── simulation ────────────────────────────────────────────────────────────
     var ripR = function (r) { if (realLive) return WATER.front(r.t); var t = r.t * (r.s >= 1 ? 1.12 : 1); return 78 * t / (1 + 0.2 * t); };
-    var ripEnv = function (r) { var u = r.t / r.life; return M.min(1, r.t / 0.2) * M.pow(M.max(0, 1 - u), 1.7) * r.s; };
+    var ripEnv = function (r) { var u = r.t / r.life; return M.min(1, r.t / 0.2) * M.pow(M.max(0, 1 - u), 1.7) * r.s * r.e; };
     var step = function (dt) {
       T += dt;
       var rm = RM.matches;
       ptr.idle += dt;
-      for (var ri = rip.length - 1; ri >= 0; ri--) { rip[ri].t += dt; if (rip[ri].t > rip[ri].life || rm) rip.splice(ri, 1); }
+      for (var ri = rip.length - 1; ri >= 0; ri--) {
+        var rq = rip[ri]; rq.t += dt; if (rq.die) rq.e -= dt / 0.8;
+        if (rq.t > rq.life || rq.e <= 0 || rm) rip.splice(ri, 1);
+      }
       var gone = 0;
       for (var ci = 0; ci < fish.length; ci++) { fish[ci].hc = M.cos(fish[ci].a); fish[ci].hs = M.sin(fish[ci].a); } // headings, for schooling
       for (var i = 0; i < fish.length; i++) {
@@ -783,8 +824,9 @@
           ja = pa + clamp(wrapA(ja - pa), -0.2, 0.2);
           f.px[s2] = f.px[s2 - 1] - M.cos(ja) * f.seg; f.py[s2] = f.py[s2 - 1] - M.sin(ja) * f.seg;
         }
-        if (f.dying) { f.fade -= dt * 0.6; if (f.fade <= 0) { f.dead = 1; gone++; } }
-        else f.fade = M.min(1, f.fade + dt * 0.5);
+        // koi (k 3) answer a toggle in ~0.6 s out, 1 s in; the shoal changes slowly
+        if (f.dying) { f.fade -= dt * (f.k === 3 ? 1.6 : 0.6); if (f.fade <= 0) { f.dead = 1; gone++; } }
+        else f.fade = M.min(1, f.fade + dt * (f.k === 3 ? 1 : 0.5));
       }
       if (gone) fish = fish.filter(function (f) { return !f.dead; });
     };
@@ -1249,6 +1291,7 @@
     // ── real water: lifecycle and per-frame inputs ─────────────────────────────
     var syncWater = function () {
       var want = realWant() && booted;
+      if (want && !water && O.adaptive && remembered()) { waterFail = true; want = false; } // this tab already fell back
       if (want && !water) {
         water = WATER.create(D);
         if (!water) { waterFail = true; want = false; }
@@ -1264,6 +1307,7 @@
       }
       var live = !!(want && water && !water.lost);
       if (live !== realLive) for (var i = 0; i < rip.length; i++) rip[i].life = live ? WATER.life : RIP_LIFE;
+      if (live && !realLive) judgeReset(performance.now(), 1500); // shaders compile, textures settle
       realLive = live;
       cv.style.display = shc.style.display = live ? "none" : "";
       if (water) water.canvas.style.display = live ? "" : "none";
@@ -1284,12 +1328,60 @@
       wrects.n = n;
       wrings.length = 0;
       for (var k = 0; k < rip.length; k++) {
-        var rp = rip[k], o2 = wrings[k] || {}; o2.x = rp.x; o2.y = rp.y - sy * rpz(); o2.t = rp.t; o2.s = rp.s; o2.life = rp.life; wrings.push(o2);
+        var rp = rip[k], o2 = wrings[k] || {}; o2.x = rp.x; o2.y = rp.y - sy * rpz(); o2.t = rp.t; o2.s = rp.s * M.max(0, rp.e); o2.life = rp.life; wrings.push(o2);
       }
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
-      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb;
+      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz;
       water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L);
+      stats.wq = water.quality;
+    };
+
+    // ── real water on a slow GPU: measure, try the cheaper quality, and only then fall back ──
+    // Judged on the median frame interval of 1 s windows, skipping a 1.5 s warm-up, stalls (> 100 ms) and
+    // frames that followed a long main-thread task (the page's jank, not the GPU's). When slow, quality 1
+    // (1 px per CSS px) is tried for a window: if that is clearly faster the GPU was the limit, so keep it,
+    // or fall back to the flat water if it is still slow. If it is no faster (a 30 Hz power-saving cap, a busy
+    // page), real water stays and the test backs off (10 s, 20 s, … 2 min). Below ~25 fps with no gain from
+    // quality 1, the flat water is tried once, for one window, the same way. A fallback is remembered for the tab
+    // session (30 min), so the next page of the site starts flat instead of janking again.
+    var AJ = { st: 0, buf: [], warm: 0, m0: 0, next: 0, back: 10000, slow: 0 }, longAt = -1e9, SKEY = "ink-fish:water-fallback", lobs = null;
+    try { if (typeof PerformanceObserver === "function") (lobs = new PerformanceObserver(function (l) { var e = l.getEntries(); for (var i = 0; i < e.length; i++) longAt = M.max(longAt, e[i].startTime + e[i].duration); })).observe({ type: "longtask" }); } catch (e) {}
+    var remembered = function () { try { var v = +Wn.sessionStorage.getItem(SKEY); return v > 0 && Date.now() - v < 18e5; } catch (e) { return false; } };
+    var judgeReset = function (now, ms) { AJ.buf.length = 0; AJ.warm = now + ms; };
+    var judgeWater = function (now, gap) {
+      if (gap > 100) { judgeReset(now, 1000); return; }
+      if (longAt > last - 20) { AJ.buf.length = 0; return; }
+      if (now < AJ.warm) return;
+      AJ.buf.push(gap);
+      if (AJ.buf.length < 60) return;
+      var b = AJ.buf.slice().sort(function (x, y) { return x - y; }), m = b[30];
+      AJ.buf.length = 0;
+      var slow = m > 21;
+      if (AJ.st === 0) {
+        if (!slow) { AJ.slow = 0; return; }
+        if (now < AJ.next) return;
+        if (water.quality === 0) { AJ.m0 = m; AJ.st = 1; water.setQuality(1); judgeReset(now, 500); }
+        else if (++AJ.slow >= 3) fallBack(); // quality 1 was kept earlier and is slow again, three windows running
+      } else if (AJ.st === 1) {
+        if (m < AJ.m0 * 0.85) { if (slow) fallBack(); else AJ.st = 0; }
+        else if (AJ.m0 > 40 && !AJ.tried) { AJ.st = 2; AJ.tried = 1; waterFail = true; syncWater(); judgeReset(now, 500); AJ.flat = 1; }
+        else { water.setQuality(0); AJ.st = 0; AJ.next = now + AJ.back; AJ.back = M.min(AJ.back * 2, 12e4); judgeReset(now, 500); }
+      }
+    };
+    // the one-window flat trial (below ~25 fps): judged by the same median, now with real water off
+    var judgeFlat = function (now, gap) {
+      if (gap > 100 || longAt > last - 20 || now < AJ.warm) return;
+      AJ.buf.push(gap);
+      if (AJ.buf.length < 60) return;
+      var b = AJ.buf.slice().sort(function (x, y) { return x - y; }), m = b[30];
+      AJ.buf.length = 0; AJ.flat = 0;
+      if (m < AJ.m0 * 0.85) fallBack();
+      else { waterFail = false; water.setQuality(0); AJ.st = 0; AJ.next = now + AJ.back; AJ.back = M.min(AJ.back * 2, 12e4); syncWater(); judgeReset(now, 500); }
+    };
+    var fallBack = function () {
+      AJ.st = 3; waterFail = true; syncWater();
+      try { Wn.sessionStorage.setItem(SKEY, String(Date.now())); } catch (e) {}
     };
 
     // ── loop ──────────────────────────────────────────────────────────────────
@@ -1311,14 +1403,12 @@
       // drop to 1 device pixel per CSS pixel, once
       // (with real water on, slow frames count too, capped, so a GPU that only manages a few fps still trips it)
       var gap = now - last;
-      if (O.adaptive && !RM.matches && gap < (realLive ? 1000 : 100) && (dprCap > 1 || realLive)) {
-        fema = fema * 0.96 + M.min(gap, 100) * 0.04;
+      if (O.adaptive && !RM.matches && realLive) judgeWater(now, gap);
+      else if (AJ.flat && O.adaptive && !RM.matches) judgeFlat(now, gap);
+      else if (O.adaptive && !RM.matches && gap < 100 && dprCap > 1) {
+        fema = fema * 0.96 + gap * 0.04;
         // the same signal also lightens the koi (no bleed, heart, grain or fin outlines)
-        // with real water on, the first step is back to the flat Canvas 2D water
-        if (++fcount > (realLive ? 30 : 60) && fema > 21) {
-          if (realLive) { waterFail = true; syncWater(); fcount = 0; fema = 16.7; }
-          else if (dpr > 1) { dprCap = 1; koiLite = true; measure(); }
-        }
+        if (++fcount > 60 && fema > 21 && dpr > 1) { dprCap = 1; koiLite = true; measure(); }
       }
       last = now;
       svel = page ? svel * 0.85 + ((sy - lastSy) / M.max(dt, 1 / 240)) * 0.15 : 0; lastSy = sy;
@@ -1431,6 +1521,7 @@
         dead = true; running = false;
         cancelAnimationFrame(raf); cancelAnimationFrame(lraf); clearTimeout(lt); clearTimeout(palT);
         if (water) { water.destroy(); water = null; }
+        if (lobs) lobs.disconnect();
         L_.forEach(function (l) { l[0].removeEventListener(l[1], l[2], l[3]); });
         if (RO) RO.disconnect(); MO.disconnect(); if (IO) IO.disconnect();
         if (cv.parentNode) cv.parentNode.removeChild(cv);
