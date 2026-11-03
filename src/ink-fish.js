@@ -1042,7 +1042,7 @@
       return k;
     };
 
-    var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), water: "flat", gw: { n: 0, comp: 0, sim: 0, cau: 0, prof: 0, up: 0 }, get dpr() { return dpr; } };
+    var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), water: "flat", gw: { n: 0, comp: 0, sim: 0, cau: 0, prof: 0, up: 0 }, get dpr() { return dpr; }, get trail() { return trl.length; } };
     // colour strings are cached per colour and alpha step (1/1000), so a frame builds almost none
     var RGBC = {}, RGBN = 0, inkG = null, inkGc = "";
     var rgba = function (c, a) {

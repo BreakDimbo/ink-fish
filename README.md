@@ -82,7 +82,7 @@ v1.1 新增的 `fixed`、`ripples`、`koi` 默认都关闭，v1.0 的用法与�
 
 v1.3 新增的 `water` 默认关闭，不开时外观与 v1.2.1 完全相同；开启后宿主里多一个 `canvas.ink-fish--water`（在主画布之后），两张 2D 画布仍在后台绘制、作为纹理上传，但不显示。演示页开启了 `water: "real"`。
 
-返回的实例：`{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }`（`stats.dpr` 为当前画布 DPR；`water` 为 `"real"` / `"flat"` / `"fallback"`；v1.3.1 起 `stats.wq` 为真实水面的档位 0/1，`stats.gw` 为累计的 GPU 工作量计数，供 QA 用）。`set({ koi })` 会让锦鲤淡入/淡出，不会打乱鱼群。`layout()` 用于页面结构变化但没有 resize 时重新测量。
+返回的实例：`{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }`（`stats.dpr` 为当前画布 DPR；`water` 为 `"real"` / `"flat"` / `"fallback"`；v1.3.1 起 `stats.wq` 为真实水面的档位 0/1，`stats.gw` 为累计的 GPU 工作量计数、`stats.trail` 为当前水纹点数，供 QA 用）。`set({ koi })` 会让锦鲤淡入/淡出，不会打乱鱼群。`layout()` 用于页面结构变化但没有 resize 时重新测量。
 
 ## 渲染原理
 
@@ -204,7 +204,7 @@ The v1.1 options `fixed`, `ripples` and `koi` are all off by default, so v1.0 us
 
 The v1.3 option `water` is off by default, and without it the look is exactly v1.2.1's. With it on, the host gets one more canvas, `canvas.ink-fish--water` (after the main canvas); the two 2D canvases keep drawing and are uploaded as textures but are hidden. The demo turns on `water: "real"`.
 
-The returned instance: `{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }` (`stats.dpr` is the current canvas DPR; `water` is `"real"`, `"flat"` or `"fallback"`; from v1.3.1 `stats.wq` is the real-water quality, 0 or 1, and `stats.gw` sums GPU work counters for QA). `set({ koi })` fades koi in or out without reshuffling the shoal. Call `layout()` after your page changes structure without a resize.
+The returned instance: `{ canvas, stats, fish, running, water, layout(), set(opts), destroy() }` (`stats.dpr` is the current canvas DPR; `water` is `"real"`, `"flat"` or `"fallback"`; from v1.3.1 `stats.wq` is the real-water quality, 0 or 1, and `stats.gw` sums GPU work counters and `stats.trail` counts the live trail points, for QA). `set({ koi })` fades koi in or out without reshuffling the shoal. Call `layout()` after your page changes structure without a resize.
 
 ### How it renders
 
