@@ -1,4 +1,4 @@
-/*! ink-fish v1.0.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.1.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -9,7 +9,9 @@
    obstacles and the headline, ease away from a fast cursor and drift curiously towards a still one.
    Soft shadows are drawn on a quarter-res layer and scaled up, so they cost no blur filter. Obstacles
    are erased from the canvas; ink under text is thinned. Layout is read only on resize/reflow, never
-   inside the frame.
+   inside the frame. Optional (v1.1): a fixed pond that stays put while the page scrolls over it,
+   restrained water rings under the cursor that refract the fish they cross, and a few koi painted
+   in muted pigment washes.
 
    Usage:   var fish = InkFish.mount(document.body, { obstacles: ".card" });  …  fish.destroy();
    or:      <body data-ink-fish>   (options as JSON in the attribute value)                          */
@@ -40,7 +42,11 @@
     ignore: "a,button,input,select,textarea,label,[data-ink-fish-ignore]", // taps here don't startle fish
     mobileQuery: "(max-width: 720px)",
     maxDpr: 1.5,
-    fadeIn: true
+    fadeIn: true,
+    fixed: false,             // page mode: true = the pond stays fixed while the page scrolls over it; false = scroll parallax
+    ripples: false,           // faint water rings under the cursor (and on tap/click) that refract the fish they cross
+    adaptive: true,           // drop to DPR 1 if frames keep arriving late
+    koi: false                // true (a few, by width) or a number: koi painted in muted pigment washes
   };
 
   var hex = function (v) {
@@ -78,7 +84,12 @@
     host.classList.add("ink-fish-host");
     host.insertBefore(cv, host.firstChild);
     var g = cv.getContext("2d");
+    // shadows live on their own quarter-res canvas just beneath; the compositor scales it up, so the
+    // main canvas never pays for a full-size blit
     var shc = D.createElement("canvas"), sg = shc.getContext("2d");
+    shc.className = cv.className + " ink-fish--shadow";
+    shc.setAttribute("aria-hidden", "true");
+    host.insertBefore(shc, cv);
     var SH = 0.25; // shadow layer scale
 
     var vw = 0, vh = 0, dpr = 1, PW = 0, PH = 0, sy = page ? (Wn.scrollY || 0) : 0, heroB = 0, mobile = MOB.matches;
@@ -108,13 +119,23 @@
       if (!(op >= 0)) op = 1;
       if (!(sh >= 0)) sh = 1;
       // ink: a warm sumi in light mode; in dark mode the page's pale ink, a touch warmer.
+      // rs/rh: the shaded and lit side of a water ring; cin/och: cinnabar and ochre pigment; pa: pigment
+      // alpha; wb: the wash on a pale koi's body
       return dark
-        ? { ink: [ink[0] * 0.94 + 10, ink[1] * 0.92 + 6, ink[2] * 0.86], a: 1.12 * op, sh: [0, 0, 0], sa: 0.26 * sh }
-        : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh };
+        ? { ink: [ink[0] * 0.94 + 10, ink[1] * 0.92 + 6, ink[2] * 0.86], a: 1.12 * op, sh: [0, 0, 0], sa: 0.26 * sh,
+            rs: [0, 0, 0], rsa: 0.5 * op, rh: [ink[0] * 0.92, ink[1] * 0.9, ink[2] * 0.84], rha: 0.075 * op,
+            cin: [194, 94, 70], och: [204, 160, 96], pa: 0.58 * op, wb: 1.45, ob: 1.45 }
+        : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
+            rs: [74, 56, 36], rsa: 0.1 * op, rh: [255, 253, 248], rha: 0.6 * op,
+            cin: [176, 60, 36], och: [172, 124, 60], pa: 0.68 * op, wb: 0.2, ob: 1 };
     };
     var mixPal = function (a, b, k) {
-      var l = function (x, y) { return x + (y - x) * k; };
-      return { ink: [l(a.ink[0], b.ink[0]), l(a.ink[1], b.ink[1]), l(a.ink[2], b.ink[2])], a: l(a.a, b.a), sh: [l(a.sh[0], b.sh[0]), l(a.sh[1], b.sh[1]), l(a.sh[2], b.sh[2])], sa: l(a.sa, b.sa) };
+      var o = {};
+      for (var key in b) {
+        var x = a[key], y = b[key];
+        o[key] = y instanceof Array ? y.map(function (v, i) { return x[i] + (v - x[i]) * k; }) : x + (y - x) * k;
+      }
+      return o;
     };
     var syncPal = function () {
       if (dead) return;
@@ -124,14 +145,15 @@
       palFrom = pal; palTo = p; palAt = performance.now();
       wake();
     };
-    var inkRGB = "";
+    var inkRGB = "", rsRGB = "", rhRGB = "", cinRGB = "", ochRGB = "";
+    var rgb = function (c) { return M.round(c[0]) + "," + M.round(c[1]) + "," + M.round(c[2]); };
     var tickPal = function (now) {
       if (palAt >= 0) {
         var k = clamp((now - palAt) / 500, 0, 1);
         pal = mixPal(palFrom, palTo, k * k * (3 - 2 * k));
         if (k >= 1) palAt = -1;
       }
-      inkRGB = M.round(pal.ink[0]) + "," + M.round(pal.ink[1]) + "," + M.round(pal.ink[2]);
+      inkRGB = rgb(pal.ink); rsRGB = rgb(pal.rs); rhRGB = rgb(pal.rh); cinRGB = rgb(pal.cin); ochRGB = rgb(pal.och);
     };
 
     // ── layout (read only on resize / reflow) ──────────────────────────────────
@@ -149,16 +171,19 @@
       if (typeof t === "string") return [{ selector: t }];
       return [].concat(t);
     };
+    var fixedOn = function () { return page && !!O.fixed; };
+    var cw = 0, ch = 0, cdpr = 0, dprCap = 9, fema = 16.7, fcount = 0;
     var measure = function () {
       var o = origin(); ox = o[0]; oy0 = o[1];
       sy = page ? (Wn.scrollY || 0) : 0;
       vw = page ? D.documentElement.clientWidth : host.clientWidth;
       vh = page ? Wn.innerHeight : host.clientHeight;
-      dpr = M.min(Wn.devicePixelRatio || 1, +O.maxDpr || 1.5);
+      dpr = M.min(Wn.devicePixelRatio || 1, +O.maxDpr || 1.5, dprCap);
       mobile = MOB.matches;
-      var hr = rectOf(q(O.hero));
+      var hr = fixedOn() ? null : rectOf(q(O.hero));
       heroB = hr ? hr.b : vh;
-      if (page) {
+      if (fixedOn()) PH = vh; // a fixed pond is the viewport
+      else if (page) {
         var hab = q(O.habitat) || D.body;
         PH = M.max(M.ceil(hab.getBoundingClientRect().bottom + sy), heroB);
       } else PH = M.max(vh, heroB);
@@ -174,9 +199,17 @@
         qa(s.selector).forEach(function (el) { var r = rectOf(el); if (r) texts.push({ r: r, keep: keep, f: f }); });
       });
       title = rectOf(q(O.title), mobile ? 10 : 22);
-      cv.width = M.round(vw * dpr); cv.height = M.round(vh * dpr);
-      cv.style.width = vw + "px"; cv.style.height = vh + "px";
-      shc.width = M.ceil(vw * SH); shc.height = M.ceil(vh * SH);
+      // resize the backing store only when the size really changes (setting width clears and reallocates it);
+      // a mobile URL bar that shows/hides keeps the taller canvas instead of reallocating mid-scroll
+      var W = vw, H = vh;
+      if (page && W === cw && dpr === cdpr && H <= ch && H > ch - 200) H = ch;
+      if (W !== cw || H !== ch || dpr !== cdpr) {
+        cw = W; ch = H; cdpr = dpr;
+        cv.width = M.round(W * dpr); cv.height = M.round(H * dpr);
+        cv.style.width = W + "px"; cv.style.height = H + "px";
+        shc.width = M.ceil(W * SH); shc.height = M.ceil(H * SH);
+        shc.style.width = shc.width / SH + "px"; shc.style.height = shc.height / SH + "px";
+      }
     };
 
     // ── species and population ────────────────────────────────────────────────
@@ -184,18 +217,28 @@
     var KIND = [
       { name: "minnow", d: [0.2, 0.38], L: [15, 23], wr: 0.072, tl: 0.2, vmax: [34, 46], cruise: 0.42, school: 1, avoid: 0, fins: 0, tone: [0.1, 0.13] },
       { name: "carp", d: [0.5, 0.66], L: [32, 44], wr: 0.095, tl: 0.23, vmax: [38, 52], cruise: 0.2, school: 0.55, avoid: 1, fins: 1, tone: [0.17, 0.21] },
-      { name: "koi", d: [0.86, 1], L: [62, 88], wr: 0.122, tl: 0.38, vmax: [30, 40], cruise: 0.08, school: 0.12, avoid: 1, fins: 2, tone: [0.27, 0.32] }
+      { name: "koi", d: [0.86, 1], L: [62, 88], wr: 0.122, tl: 0.38, vmax: [30, 40], cruise: 0.08, school: 0.12, avoid: 1, fins: 2, tone: [0.27, 0.32], big: 1 },
+      // nishikigoi: painted koi, a little larger and slower
+      { name: "nishiki", d: [0.88, 1], L: [72, 96], wr: 0.13, tl: 0.4, vmax: [24, 32], cruise: 0.06, school: 0.1, avoid: 1, fins: 2, tone: [0.27, 0.31], big: 1, color: 1 }
     ];
+    // varieties: patches are [s along the body 0…1, lateral −1…1, radius ÷ L, stretch along the body]
+    var VARIETY = [
+      { name: "kohaku", body: "pale", pig: "cin", patch: function () { var p = [[rnd(0.1, 0.2), rnd(-0.3, 0.3), rnd(0.1, 0.13), 1.5]]; p.push([rnd(0.36, 0.46), rnd(-0.35, 0.35), rnd(0.1, 0.14), 1.8]); if (M.random() < 0.7) p.push([rnd(0.58, 0.66), rnd(-0.3, 0.3), rnd(0.07, 0.1), 1.4]); return p; } },
+      { name: "tancho", body: "pale", pig: "cin", patch: function () { return [[0.11, 0, rnd(0.07, 0.08), 1.05]]; } },
+      { name: "yamabuki", body: "och", pig: "och", patch: function () { return []; } },
+      { name: "showa", body: "ink", pig: "cin", patch: function () { return [[rnd(0.08, 0.18), rnd(-0.4, 0.4), rnd(0.09, 0.12), 1.4], [rnd(0.4, 0.55), rnd(-0.5, 0.5), rnd(0.08, 0.11), 1.7]]; } }
+    ];
+    var varAt = (M.random() * VARIETY.length) | 0;
     var free = function (x, y, pad) {
       for (var i = 0; i < walls.length; i++) { var o = walls[i]; if (x > o.l - pad && x < o.r + pad && y > o.t - pad && y < o.b + pad) return false; }
       return true;
     };
     var heroEl = function () { return !!q(O.hero); };
     var koiB = PH;
-    var habitatB = function (k) { return k === 2 ? koiB : PH; };
+    var habitatB = function (k) { return KIND[k].big ? koiB : PH; };
     var spawn = function (k, near) {
       var K = KIND[k], f = { k: k, K: K }, s = mobile ? 0.78 : 1, tries = 0;
-      f.d = rnd(K.d[0], K.d[1]); f.pz = 0.55 + 0.45 * f.d;
+      f.d = rnd(K.d[0], K.d[1]); f.pz = fixedOn() ? 0 : 0.55 + 0.45 * f.d;
       f.L = rnd(K.L[0], K.L[1]) * s; f.vmax = rnd(K.vmax[0], K.vmax[1]) * (mobile ? 0.85 : 1);
       f.tone = rnd(K.tone[0], K.tone[1]);
       var hb = habitatB(k);
@@ -208,42 +251,65 @@
       f.v = f.vmax * 0.3; f.w = 0; f.th = K.cruise; f.thT = K.cruise; f.mode = 0; f.tm = rnd(0, 2);
       f.ph = rnd(0, TAU); f.amp = f.L * 0.05; f.vm = 1; f.cur = M.random(); f.fade = 0;
       f.w1 = rnd(0.07, 0.16); f.w2 = rnd(0.21, 0.37); f.p1 = rnd(0, TAU); f.p2 = rnd(0, TAU);
+      if (K.color) { f.V = VARIETY[varAt++ % VARIETY.length]; f.patch = f.V.patch(); }
       f.n = 11; f.seg = f.L / (f.n - 1); f.px = new Float32Array(f.n); f.py = new Float32Array(f.n);
       for (var i = 0; i < f.n; i++) { f.px[i] = f.x - M.cos(f.a) * f.seg * i; f.py[i] = f.y - M.sin(f.a) * f.seg * i; }
       return f;
     };
     var counts = function () {
       var C = O.count;
-      if (C && typeof C === "object") return [M.max(0, C.minnow | 0), M.max(0, C.carp | 0), M.max(0, C.koi | 0)];
+      // painted koi: true = a few by width (3–6 on desktop, 2 on mobile), or a number
+      var nk = O.koi === true ? (mobile ? 2 : M.round(clamp(vw / 360, 3, 6))) : M.max(0, M.round(+O.koi) || 0);
+      var withKoi = function (c) { if (nk && c[2]) c[2] = M.max(1, c[2] - nk + 1); c.push(nk); return c; }; // fewer ink koi beside painted ones
+      if (C && typeof C === "object") return [M.max(0, C.minnow | 0), M.max(0, C.carp | 0), M.max(0, C.koi | 0), nk];
       if (typeof C === "number" || (typeof C === "string" && C !== "auto" && !isNaN(+C))) {
         var n = M.max(0, M.round(+C)), kq = n >= 6 ? M.max(1, M.round(n * 0.08)) : 0, cq = M.round(n * 0.3);
-        return [M.max(0, n - kq - cq), cq, kq];
+        return withKoi([M.max(0, n - kq - cq), cq, kq]);
       }
       // "auto": open water on the canvas (24 px grid), excluding the obstacles
       var area = 0, heroArea = vw * heroB, dn = +O.density > 0 ? +O.density : 1;
       for (var y = 12; y < PH; y += 24) for (var x = 12; x < vw; x += 24) if (free(x, y, 16)) area += 576;
       area *= dn;
-      return [
+      return withKoi([
         M.round(clamp(area / (mobile ? 10000 : 38000), mobile ? 10 : 16, mobile ? 20 : 36)),
         M.round(clamp(area / (mobile ? 26000 : 70000), mobile ? 4 : 8, mobile ? 8 : 18)),
         mobile ? 2 : M.round(clamp(heroArea * dn / 160000, 3, 5))
-      ];
+      ]);
     };
     var populate = function () {
-      koiB = heroEl() ? heroB + (mobile ? 40 : 160) : PH;
+      koiB = heroEl() && !fixedOn() ? heroB + (mobile ? 40 : 160) : PH;
       var c = counts(), minnows = c[0], carp = c[1], koi = c[2];
       fish = [];
       // minnows arrive in small schools
       while (fish.length < minnows) { var lead = spawn(0), n = 3 + (M.random() * 5) | 0; fish.push(lead); for (var j = 1; j < n && fish.length < minnows; j++) fish.push(spawn(0, lead)); }
       for (var k = 0; k < carp; k++) fish.push(k % 3 && fish.length ? spawn(1, fish[fish.length - 1].k === 1 ? fish[fish.length - 1] : null) : spawn(1));
       for (var qk = 0; qk < koi; qk++) fish.push(spawn(2));
+      for (var nq = 0; nq < c[3]; nq++) fish.push(spawn(3));
       fish.sort(function (a, b) { return a.d - b.d; }); // paint far → near
+    };
+    // change the population in place: extra fish fade out, new ones fade in (no reshuffle)
+    var reconcile = function () {
+      koiB = heroEl() && !fixedOn() ? heroB + (mobile ? 40 : 160) : PH;
+      var c = counts(), have = [0, 0, 0, 0];
+      for (var i = 0; i < fish.length; i++) { var f = fish[i]; if (f.dying) continue; if (have[f.k] >= c[f.k]) f.dying = 1; else have[f.k]++; }
+      for (var k = 0; k < 4; k++) while (have[k] < c[k]) { fish.push(spawn(k, k === 0 && M.random() < 0.6 && fish.length ? fish[(M.random() * fish.length) | 0] : null)); have[k]++; }
+      fish.sort(function (a, b) { return a.d - b.d; });
+      wake();
     };
 
     // ── input ─────────────────────────────────────────────────────────────────
     var ptr = { x: 0, y: 0, on: false, sp: 0, t: 0, idle: 9 }, svel = 0, lastSy = sy;
     var L_ = []; // listeners to remove on destroy
     var on = function (t, ev, fn, o) { t.addEventListener(ev, fn, o); L_.push([t, ev, fn, o]); };
+    // ── water rings: a few at a time, spawned by distance and time, never per mousemove ──
+    var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 3.6, RIP_MAX = 5, fronts = [];
+    var rpz = function () { return page && !O.fixed ? 1 : 0; }; // in parallax mode the rings ride on the page
+    var addRipple = function (x, y, s) {
+      if (!O.ripples || RM.matches) return;
+      if (rip.length >= RIP_MAX) rip.shift();
+      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s });
+      wake();
+    };
     var kick = function (f, k) { f.mode = 1; f.tm = rnd(0.35, 0.6); f.thT = M.max(f.thT, k); };
     var inside = function (x, y) { return page || (x >= 0 && y >= 0 && x <= vw && y <= vh); };
     on(Wn, "pointermove", function (e) {
@@ -254,6 +320,10 @@
       var sp = M.hypot(cx - ptr.x, cy - ptr.y) / dt * 1000;
       ptr.sp = ptr.sp * 0.7 + sp * 0.3; ptr.x = cx; ptr.y = cy; ptr.t = now; ptr.idle = 0;
       ptr.on = inside(cx, cy) && free(cx, cy + sy, 6);
+      if (ptr.on && O.ripples) {
+        var rd = M.hypot(cx - ripLast.x, cy - ripLast.y);
+        if (rd > 120 && now - ripLast.t > 340) { addRipple(cx, cy, clamp(0.34 + ptr.sp / 4200, 0.34, 0.62)); ripLast.x = cx; ripLast.y = cy; ripLast.t = now; }
+      }
       wake();
     }, { passive: true });
     var off = function () { ptr.on = false; };
@@ -267,6 +337,8 @@
       if (RM.matches || (sel && t && t.closest && t.closest(sel))) return;
       var o = origin(), x = e.clientX - o[0], y = e.clientY - o[1];
       if (!inside(x, y) || !free(x, y + sy, 4)) return;
+      addRipple(x, y, 1); // a single, slightly stronger ring (touch: ripples on tap only)
+      ripLast.x = x; ripLast.y = y; ripLast.t = performance.now();
       for (var i = 0; i < fish.length; i++) {
         var f = fish[i], dx = f.x - x, dy = f.y - sy * f.pz - y, d = M.hypot(dx, dy);
         if (d < 240 * (0.6 + f.d)) { f.a = wrapA(f.a + clamp(wrapA(M.atan2(dy, dx) - f.a), -1.4, 1.4) * 0.5); kick(f, 1); }
@@ -275,10 +347,14 @@
     if (page) on(Wn, "scroll", function () { sy = Wn.scrollY || 0; wake(); }, { passive: true });
 
     // ── simulation ────────────────────────────────────────────────────────────
+    var ripR = function (r) { var t = r.t * (r.s >= 1 ? 1.12 : 1); return 78 * t / (1 + 0.2 * t); };
+    var ripEnv = function (r) { var u = r.t / RIP_LIFE; return M.min(1, r.t / 0.2) * M.pow(M.max(0, 1 - u), 1.7) * r.s; };
     var step = function (dt) {
       T += dt;
       var rm = RM.matches;
       ptr.idle += dt;
+      for (var ri = rip.length - 1; ri >= 0; ri--) { rip[ri].t += dt; if (rip[ri].t > RIP_LIFE || rm) rip.splice(ri, 1); }
+      var gone = 0;
       for (var i = 0; i < fish.length; i++) {
         var f = fish[i], K = f.K, L = f.L, oy = sy * (1 - f.pz); // page y = layer y + oy
         var ca = M.cos(f.a), sa = M.sin(f.a);
@@ -288,7 +364,7 @@
         fx += M.cos(wa) * 0.8; fy += M.sin(wa) * 0.8;
         // school with fish of the same kind
         if (K.school > 0) {
-          var R = M.min(L * 5.5, f.k === 2 ? 170 : 200), R2 = R * R, sep = L * 1.25, n = 0, ax = 0, ay = 0, cx = 0, cy = 0, sx = 0, sy2 = 0;
+          var R = M.min(L * 5.5, K.big ? 170 : 200), R2 = R * R, sep = L * 1.25, n = 0, ax = 0, ay = 0, cx = 0, cy = 0, sx = 0, sy2 = 0;
           for (var j = 0; j < fish.length; j++) {
             var o = fish[j];
             if (o === f || o.k !== f.k) continue;
@@ -322,7 +398,7 @@
             }
           }
           // the large fish give the headline room
-          if (f.k === 2 && title) {
+          if (K.big && title) {
             var tx = clamp(f.x, title.l, title.r), ty = clamp(f.y + oy, title.t, title.b), ex = f.x - tx, ey = f.y + oy - ty, de = M.hypot(ex, ey);
             if (de < 50) { fx += (de ? ex / de : 0) * 1.4 * (1 - de / 50); fy += (de ? ey / de : -1) * 1.4 * (1 - de / 50); }
           }
@@ -341,13 +417,18 @@
             var kq = 1 - dp / (reach * 0.7); fx += ex2 / dp * kq * 1.6; fy += ey2 / dp * kq * 1.6;
           }
         }
+        // a passing ring nudges the fish it crosses, outward
+        for (var rj = 0; rj < rip.length; rj++) {
+          var rp = rip[rj], rr = ripR(rp), rcx = f.x - rp.x, rcy = (f.y - sy * f.pz) - (rp.y - sy * rpz()), rdd = M.hypot(rcx, rcy) || 1, del = rdd - rr;
+          if (del > -L * 0.5 && del < 16) { var ra0 = ripEnv(rp) * (1 - M.abs(del + L * 0.17) / (L * 0.67 + 16)); fx += rcx / rdd * ra0 * 1.6; fy += rcy / rdd * ra0 * 1.6; }
+        }
         // a fast scroll is felt as a current: a few fish dart, the rest lean with it
         if (!rm && O.interactive && M.abs(svel) > 1400 && M.random() < dt * 0.9 * (1 - f.d * 0.5)) kick(f, 0.8);
         fy += clamp(svel / 2400, -1, 1) * 0.5 * (1.2 - f.d);
 
         // ── turning: limited curvature, eased angular velocity ──
         var da = wrapA(M.atan2(fy, fx) - f.a);
-        var wmax = (0.45 + 2.1 * f.v / f.vmax) * (f.k === 2 ? 0.7 : 1);
+        var wmax = (0.45 + 2.1 * f.v / f.vmax) * (K.big ? 0.7 : 1);
         var wt = clamp(da * 2.2, -wmax, wmax);
         f.w += (wt - f.w) * M.min(1, dt * 3);
         f.a = wrapA(f.a + f.w * dt);
@@ -355,7 +436,7 @@
         // ── rhythm: burst, then a long glide ──
         f.tm -= dt;
         if (f.tm <= 0) {
-          if (f.mode === 1 || rm) { f.mode = 0; f.tm = rnd(1.1, 3.4) * (f.k === 2 ? 1.6 : 1) * (rm ? 3 : 1); f.thT = K.cruise * rnd(0.6, 1.3); }
+          if (f.mode === 1 || rm) { f.mode = 0; f.tm = rnd(1.1, 3.4) * (K.big ? 1.6 : 1) * (rm ? 3 : 1); f.thT = K.cruise * rnd(0.6, 1.3); }
           else { f.mode = 1; f.tm = rnd(0.35, 0.8) * (0.7 + L / 120); f.thT = rnd(0.55, 0.9); }
         }
         f.th += (f.thT - f.th) * M.min(1, dt * (f.thT > f.th ? 5 : 1.4));
@@ -377,8 +458,10 @@
           ja = pa + clamp(wrapA(ja - pa), -0.2, 0.2);
           f.px[s2] = f.px[s2 - 1] - M.cos(ja) * f.seg; f.py[s2] = f.py[s2 - 1] - M.sin(ja) * f.seg;
         }
-        f.fade = M.min(1, f.fade + dt * 0.5);
+        if (f.dying) { f.fade -= dt * 0.6; if (f.fade <= 0) { f.dead = 1; gone++; } }
+        else f.fade = M.min(1, f.fade + dt * 0.5);
       }
+      if (gone) fish = fish.filter(function (f) { return !f.dead; });
     };
 
     // ── drawing ───────────────────────────────────────────────────────────────
@@ -397,6 +480,17 @@
         var nx = -ty / tl, ny = tx / tl;
         var o = f.amp * (0.14 + 0.86 * s * s) * M.sin(f.ph - s * 5.4);
         CX[i] = a + nx * o; CY[i] = b + ny * o;
+      }
+      // refraction: a ring passing over the fish bends its outline a pixel or two, radially
+      for (var fr = 0; fr < fronts.length; fr++) {
+        var F0 = fronts[fr], hdx = CX[0] - F0.x, hdy = CY[0] - F0.y, hd = M.sqrt(hdx * hdx + hdy * hdy);
+        if (M.abs(hd - F0.r) > f.L + F0.b) continue;
+        for (var pi = 0; pi < n; pi++) {
+          var ddx = CX[pi] - F0.x, ddy = CY[pi] - F0.y, dd = M.sqrt(ddx * ddx + ddy * ddy) || 1, de = dd - F0.r;
+          if (de <= -F0.b || de >= F0.b) continue;
+          var disp = 2.6 * F0.a * M.sin(PI * de / F0.b);
+          CX[pi] += ddx / dd * disp; CY[pi] += ddy / dd * disp;
+        }
       }
       var bank = clamp(f.w * 0.22, -0.3, 0.3);
       for (var k = 0; k < n; k++) {
@@ -425,7 +519,7 @@
       var ta = M.atan2(CY[e] - CY[e - 2], CX[e] - CX[e - 2]);
       var lag = M.sin(f.ph - 5.4 - 1.1); // the fin trails the peduncle
       ta += lag * clamp(f.amp / f.L * 3.2, 0, 0.55);
-      var lt = f.L * f.K.tl, spr = 0.36 + 0.16 * (1 - f.th), bend = lag * (f.k === 2 ? 0.4 : 0.22);
+      var lt = f.L * f.K.tl, spr = 0.36 + 0.16 * (1 - f.th), bend = lag * (f.K.big ? 0.4 : 0.22);
       var t1 = ta + spr, t2 = ta - spr, w = WD[e] * 1.1;
       var nx = -M.sin(ta), ny = M.cos(ta), ux = M.cos(ta), uy = M.sin(ta);
       var p = function (x, y) { return [(x + dx) * sc, (y + dy) * sc]; };
@@ -467,16 +561,93 @@
       return k;
     };
 
-    var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600) };
+    var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), get dpr() { return dpr; } };
+    var rgba = function (c, a) { return "rgba(" + c + "," + M.max(0, a).toFixed(3) + ")"; };
+    // painted koi: the same wash language as the ink fish, with pigment laid in soft patches clipped to the body
+    var drawKoi = function (F, al, fa) {
+      var e = F.n - 1, V = F.V, pa = pal.pa * fa, pig = V.pig === "och" ? ochRGB : cinRGB;
+      var body = V.body, finC = body === "och" ? ochRGB : inkRGB, finA = body === "och" ? pa * 0.42 : body === "ink" ? al * 0.5 : al * 0.3;
+      g.fillStyle = rgba(finC, finA);
+      g.beginPath();
+      var tail = tailPath(g, F, 1, 0, 0);
+      var spl = 0.5 + 0.75 * (1 - F.th) + 0.12 * M.sin(F.ph * 0.5), spr = 0.5 + 0.75 * (1 - F.th) + 0.12 * M.sin(F.ph * 0.5 + 1.7), fl = F.L * 0.24;
+      finPath(g, F, 2, 1, fl, spl + clamp(F.w * 0.4, -0.3, 0.3));
+      finPath(g, F, 2, -1, fl, spr - clamp(F.w * 0.4, -0.3, 0.3));
+      finPath(g, F, 6, 1, fl * 0.6, spl * 0.8); finPath(g, F, 6, -1, fl * 0.6, spr * 0.8);
+      g.fill();
+      // body wash
+      var gr = g.createLinearGradient(CX[0], CY[0], CX[e], CY[e]);
+      if (body === "ink") { gr.addColorStop(0, rgba(inkRGB, al * 1.05)); gr.addColorStop(0.45, rgba(inkRGB, al * 0.82)); gr.addColorStop(1, rgba(inkRGB, al * 0.5)); }
+      else if (body === "och") { var ob = pa * pal.ob; gr.addColorStop(0, rgba(ochRGB, ob * 0.78)); gr.addColorStop(0.5, rgba(ochRGB, ob * 0.62)); gr.addColorStop(1, rgba(ochRGB, ob * 0.3)); }
+      else { var wb = al * pal.wb; gr.addColorStop(0, rgba(inkRGB, wb * 1.1)); gr.addColorStop(0.5, rgba(inkRGB, wb * 0.8)); gr.addColorStop(1, rgba(inkRGB, wb * 0.45)); }
+      g.fillStyle = gr;
+      g.beginPath(); bodyPath(g, F, 1, 0, 0); g.fill();
+      // pigment patches, soft-edged, clipped to the body
+      var P = F.patch;
+      if (P.length) {
+        g.save();
+        g.beginPath(); bodyPath(g, F, 1, 0, 0); g.clip();
+        for (var i = 0; i < P.length; i++) {
+          var p = P[i], u = p[0] * e, i0 = M.min(e - 1, u | 0), t = u - i0;
+          var px = CX[i0] + (CX[i0 + 1] - CX[i0]) * t, py = CY[i0] + (CY[i0 + 1] - CY[i0]) * t, w = WD[i0] + (WD[i0 + 1] - WD[i0]) * t;
+          var cx = px + NX[i0] * w * p[1], cy = py + NY[i0] * w * p[1], rad = F.L * p[2];
+          g.setTransform(dpr, 0, 0, dpr, 0, 0);
+          g.translate(cx, cy); g.rotate(M.atan2(CY[i0] - CY[i0 + 1], CX[i0] - CX[i0 + 1])); g.scale(p[3], 1);
+          var rg = g.createRadialGradient(0, 0, 0, 0, 0, rad);
+          rg.addColorStop(0, rgba(pig, pa)); rg.addColorStop(0.62, rgba(pig, pa * 0.92)); rg.addColorStop(0.84, rgba(pig, pa * 0.45)); rg.addColorStop(1, rgba(pig, 0));
+          g.fillStyle = rg;
+          g.fillRect(-rad, -rad, rad * 2, rad * 2);
+        }
+        g.restore();
+      }
+      // a pale koi is drawn by its outline, as on paper
+      if (body !== "ink") {
+        g.strokeStyle = rgba(inkRGB, al * (body === "och" ? 0.3 : 0.5));
+        g.lineWidth = 0.75;
+        g.beginPath(); bodyPath(g, F, 1, 0, 0); g.stroke();
+      }
+      // dorsal ridge and tail rays, fainter than on the ink koi
+      g.lineCap = "round";
+      g.strokeStyle = rgba(body === "och" ? ochRGB : inkRGB, body === "och" ? pa * 0.5 : al * (body === "ink" ? 0.55 : 0.24));
+      g.lineWidth = F.L * 0.028;
+      g.beginPath(); g.moveTo(CX[1], CY[1]);
+      for (var s = 2; s < 7; s++) g.quadraticCurveTo(CX[s], CY[s], (CX[s] + CX[s + 1]) / 2, (CY[s] + CY[s + 1]) / 2);
+      g.stroke();
+      g.lineWidth = 0.6;
+      g.strokeStyle = rgba(inkRGB, al * 0.3);
+      g.beginPath();
+      for (var r2 = -1; r2 <= 1; r2 += 0.5) {
+        var ra = tail[2] + r2 * tail[4] * 0.85, rl = tail[3] * (0.62 + 0.3 * M.abs(r2));
+        g.moveTo(tail[0], tail[1]); g.lineTo(tail[0] + M.cos(ra) * rl, tail[1] + M.sin(ra) * rl);
+      }
+      g.stroke();
+      g.fillStyle = rgba(inkRGB, M.min(1, al * 1.9));
+      g.beginPath();
+      var er = M.max(0.8, F.L * 0.013), ex = CX[0] * 0.7 + CX[1] * 0.3, ey = CY[0] * 0.7 + CY[1] * 0.3, ew = WD[1] * 0.62;
+      g.moveTo(ex + NX[0] * ew + er, ey + NY[0] * ew); g.arc(ex + NX[0] * ew, ey + NY[0] * ew, er, 0, TAU);
+      g.moveTo(ex - NX[0] * ew + er, ey - NY[0] * ew); g.arc(ex - NX[0] * ew, ey - NY[0] * ew, er, 0, TAU);
+      g.fill();
+    };
     var render = function () {
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, cv.width, cv.height);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       var drawn = 0, alphaAll = pal.a;
+      // ring wavefronts for this frame (screen space): each ring is a short train of three
+      fronts.length = 0;
+      for (var ri = 0; ri < rip.length; ri++) {
+        var rp = rip[ri], r0 = ripR(rp), en = ripEnv(rp), ry = rp.y - sy * rpz();
+        for (var wk = 0; wk < 3; wk++) {
+          var rk = r0 - wk * (14 + r0 * 0.07);
+          if (rk < 2) break;
+          var ak = en * [1, 0.55, 0.28][wk] / (1 + rk / 110);
+          if (ak > 0.004) fronts.push({ x: rp.x, y: ry, r: rk, b: 8 + rk * 0.06, a: ak });
+        }
+      }
+      sg.setTransform(1, 0, 0, 1, 0, 0);
+      sg.clearRect(0, 0, shc.width, shc.height);
       if (pal.sa > 0) {
-        sg.setTransform(1, 0, 0, 1, 0, 0);
-        sg.clearRect(0, 0, shc.width, shc.height);
-        sg.fillStyle = "#000";
+        sg.fillStyle = "rgba(0,0,0," + pal.sa.toFixed(3) + ")";
         // shadows: mid and near fish cast a soft shadow on the paper, offset by their height under the lamp
         sg.beginPath();
         for (var i = 0; i < fish.length; i++) {
@@ -489,10 +660,14 @@
           bodyPath(sg, f, SH, h * 0.55, h);
         }
         sg.fill();
-        g.globalAlpha = pal.sa;
-        g.imageSmoothingEnabled = true;
-        g.drawImage(shc, 0, 0, shc.width, shc.height, 0, 0, shc.width / SH, shc.height / SH);
-        g.globalAlpha = 1;
+        sg.globalCompositeOperation = "destination-out";
+        sg.fillStyle = "#000";
+        for (var so = 0; so < obs.length; so++) {
+          var SR = obs[so];
+          if (SR.b - sy < 0 || SR.t - sy > vh) continue;
+          sg.fillRect((SR.l - 2) * SH, (SR.t - sy - 2) * SH, (SR.r - SR.l + 4) * SH, (SR.b - SR.t + 4) * SH);
+        }
+        sg.globalCompositeOperation = "source-over";
       }
 
       for (var qq = 0; qq < fish.length; qq++) {
@@ -500,9 +675,10 @@
         if (hx < -F.L * 2 || hx > vw + F.L * 2 || hy < -F.L * 2 || hy > vh + F.L * 2) continue;
         drawn++;
         spine(F, oy2);
-        var al = F.tone * alphaAll * F.fade * fadeAt(CX[3], CY[3]);
+        var fa = F.fade * fadeAt(CX[3], CY[3]), al = F.tone * alphaAll * fa;
         if (al < 0.004) continue;
         var e = F.n - 1;
+        if (F.K.color) { drawKoi(F, al, fa); continue; }
         // fins first, paler than the body (ink thinned with water)
         g.fillStyle = "rgba(" + inkRGB + "," + (al * 0.5).toFixed(3) + ")";
         g.beginPath();
@@ -510,10 +686,10 @@
         if (F.K.fins) {
           var spl = 0.5 + 0.75 * (1 - F.th) + 0.12 * M.sin(F.ph * 0.5);
           var spr = 0.5 + 0.75 * (1 - F.th) + 0.12 * M.sin(F.ph * 0.5 + 1.7);
-          var fl = F.L * (F.k === 2 ? 0.23 : 0.16);
+          var fl = F.L * (F.K.big ? 0.23 : 0.16);
           finPath(g, F, 2, 1, fl, spl + clamp(F.w * 0.4, -0.3, 0.3));
           finPath(g, F, 2, -1, fl, spr - clamp(F.w * 0.4, -0.3, 0.3));
-          if (F.k === 2) { finPath(g, F, 6, 1, fl * 0.6, spl * 0.8); finPath(g, F, 6, -1, fl * 0.6, spr * 0.8); }
+          if (F.K.big) { finPath(g, F, 6, 1, fl * 0.6, spl * 0.8); finPath(g, F, 6, -1, fl * 0.6, spr * 0.8); }
         }
         g.fill();
         // body: ink pooled at the head and along the back, washing out toward the tail
@@ -528,13 +704,13 @@
         if (F.k > 0) {
           // the dorsal ridge: one darker brush stroke down the back
           g.strokeStyle = "rgba(" + inkRGB + "," + (al * 0.55).toFixed(3) + ")";
-          g.lineWidth = F.L * (F.k === 2 ? 0.03 : 0.026);
+          g.lineWidth = F.L * (F.K.big ? 0.03 : 0.026);
           g.lineCap = "round";
           g.beginPath();
           g.moveTo(CX[1], CY[1]);
           for (var s = 2; s < 7; s++) g.quadraticCurveTo(CX[s], CY[s], (CX[s] + CX[s + 1]) / 2, (CY[s] + CY[s + 1]) / 2);
           g.stroke();
-          if (F.k === 2) {
+          if (F.K.big) {
             // fine rays in the tail
             g.lineWidth = 0.6;
             g.strokeStyle = "rgba(" + inkRGB + "," + (al * 0.38).toFixed(3) + ")";
@@ -555,6 +731,18 @@
           g.fill();
         }
       }
+      // water rings: a hairline of shade on the inner slope, a hairline of light on the outer one
+      if (fronts.length) {
+        g.lineCap = "butt";
+        for (var fq = 0; fq < fronts.length; fq++) {
+          var W0 = fronts[fq], lw = 1 + W0.r * 0.007;
+          g.lineWidth = lw;
+          g.strokeStyle = "rgba(" + rsRGB + "," + (W0.a * pal.rsa).toFixed(4) + ")";
+          g.beginPath(); g.arc(W0.x, W0.y, M.max(0.5, W0.r - lw * 0.6), 0, TAU); g.stroke();
+          g.strokeStyle = "rgba(" + rhRGB + "," + (W0.a * pal.rha).toFixed(4) + ")";
+          g.beginPath(); g.arc(W0.x, W0.y, W0.r + lw * 0.6, 0, TAU); g.stroke();
+        }
+      }
       // obstacles stay clean
       g.globalCompositeOperation = "destination-out";
       g.fillStyle = "#000";
@@ -571,7 +759,7 @@
     var STEP = 1 / 60, raf = 0, last = 0, acc = 0, running = false, shown = false, rmLast = 0;
     var waterOnScreen = function () {
       if (!onScreen) return false;
-      if (!page || sy < heroB) return true;
+      if (!page || fixedOn() || sy < heroB || rip.length) return true;
       // below the hero: only the margins beside the obstacles show water
       var m = 0;
       for (var i = 0; i < obs.length; i++) { var r = obs[i]; if (r.b > sy && r.t < sy + vh) m = M.max(m, M.min(r.l, vw - r.r)); }
@@ -582,6 +770,12 @@
       if (dead || !shown || D.hidden || !onScreen) { running = false; return; }
       var t0 = performance.now();
       var dt = M.min(0.1, (now - last) / 1000);
+      // adaptive resolution: if frames keep arriving late (a slow device rasterising a large canvas),
+      // drop to 1 device pixel per CSS pixel, once
+      if (O.adaptive && !RM.matches && now - last < 100 && dprCap > 1) {
+        fema = fema * 0.96 + (now - last) * 0.04;
+        if (++fcount > 60 && fema > 21 && dpr > 1) { dprCap = 1; measure(); }
+      }
       last = now;
       svel = page ? svel * 0.85 + ((sy - lastSy) / M.max(dt, 1 / 240)) * 0.15 : 0; lastSy = sy;
       if (RM.matches) {
@@ -651,7 +845,7 @@
         for (var k = 0; k < fish.length; k++) fish[k].fade = 1;
         shown = true;
         render();
-        if (O.fadeIn) cv.classList.add("on"); else { cv.style.transition = "none"; cv.classList.add("on"); }
+        [shc, cv].forEach(function (c) { if (!O.fadeIn) c.style.transition = "none"; c.classList.add("on"); });
         wake();
       };
       requestAnimationFrame(settle);
@@ -668,10 +862,18 @@
       layout: layout,
       /** Change options at runtime, e.g. set({ theme: "dark" }) or set({ count: 20 }). */
       set: function (o) {
-        var repop = o && ("count" in o || "density" in o);
+        o = o || {};
+        var repop = "count" in o || "density" in o || ("fixed" in o && !!o.fixed !== !!O.fixed);
+        var recon = "koi" in o && o.koi !== O.koi;
         assign(O, o);
         syncPal();
-        if (booted) { measure(); if (repop) { populate(); for (var k = 0; k < fish.length; k++) fish[k].fade = 1; } if (shown) { tickPal(performance.now()); render(); wake(); } }
+        if (!O.ripples) rip.length = 0;
+        if (booted) {
+          measure();
+          if (repop) { populate(); for (var k = 0; k < fish.length; k++) fish[k].fade = 1; }
+          else if (recon) reconcile();
+          if (shown) { tickPal(performance.now()); render(); wake(); }
+        }
         return api;
       },
       destroy: function () {
@@ -681,6 +883,7 @@
         L_.forEach(function (l) { l[0].removeEventListener(l[1], l[2], l[3]); });
         if (RO) RO.disconnect(); MO.disconnect(); if (IO) IO.disconnect();
         if (cv.parentNode) cv.parentNode.removeChild(cv);
+        if (shc.parentNode) shc.parentNode.removeChild(shc);
         host.classList.remove("ink-fish-host");
         if (hostPos !== null) host.style.position = hostPos;
         if (host.__inkFish === api) delete host.__inkFish;
@@ -707,5 +910,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.0.0" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.1.0" };
 });
