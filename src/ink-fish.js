@@ -1289,7 +1289,6 @@
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
       L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb;
-      if (Wn.__inkFishLook) assign(L, Wn.__inkFishLook); // QA tuning hook
       water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L);
     };
 
