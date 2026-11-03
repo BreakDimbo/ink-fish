@@ -129,17 +129,20 @@
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
       "o=vec4(h,s,m);}";
     // caustics (after Evan Wallace): a grid refracted onto the floor; each triangle adds old area / new area
+    // (the slope is box-filtered over one grid cell first: a wavelength shorter than two cells would alias into dashes)
     var VS_CAU = HEAD + "in vec2 a;uniform sampler2D Wt;uniform vec2 ws,vp;uniform float D,E;out vec2 o0;" +
       "vec4 bs(vec2 uv){vec2 x=uv*ws-.5,b=floor(x),f=x-b,f2=f*f,f3=f2*f;" +
       "vec2 w0=(1.-3.*f+3.*f2-f3)/6.,w1=(4.-6.*f2+3.*f3)/6.,w2=(1.+3.*f+3.*f2-3.*f3)/6.,w3=f3/6.,g0=w0+w1,g1=w2+w3;" +
       "vec2 h0=(b-.5+w1/g0)/ws,h1=(b+1.5+w3/g1)/ws;" +
       "return g0.y*(g0.x*texture(Wt,h0)+g1.x*texture(Wt,vec2(h1.x,h0.y)))+g1.y*(g0.x*texture(Wt,vec2(h0.x,h1.y))+g1.x*texture(Wt,h1));}" +
-      "void main(){vec2 uv=mix(vec2(-E),vec2(1.+E),a);vec2 s=bs(uv).yz;vec2 p=vec2(uv.x,1.-uv.y)*vp,q=p+D*s;o0=p;" +
+      "uniform vec2 G;void main(){vec2 uv=mix(vec2(-E),vec2(1.+E),a),g=vec2(G.x,-G.y);vec2 s=.25*(bs(uv+G).yz+bs(uv-G).yz+bs(uv+g).yz+bs(uv-g).yz);vec2 p=vec2(uv.x,1.-uv.y)*vp,q=p+D*s;o0=p;" +
       "gl_Position=vec4(q.x/vp.x*2.-1.,1.-q.y/vp.y*2.,0.,1.);}";
     var FS_CAU = HEAD + "in vec2 o0;uniform float px;out vec4 o;void main(){vec2 x=dFdx(o0),y=dFdy(o0);o=vec4(min(abs(x.x*y.y-x.y*y.x)/px,10.),0.,0.,1.);}";
-    // the sky is not a point: its penumbra blurs the floor light by about depth × its angular size (half resolution)
+    // the sky is not a point: its penumbra blurs the floor light by about depth × its angular size (half resolution);
+    // never less than one grid cell, so a young ring's tight wavelengths don't print the triangles as dashes
     var FS_BLUR = HEAD + "uniform sampler2D C;uniform vec2 cb;in vec2 v;out vec4 o;float cl(vec2 u){return min(texture(C,u).r,2.5);}" +
-      "void main(){o=vec4(.4*cl(v)+.15*(cl(v+cb)+cl(v-cb)+cl(v+vec2(cb.x,-cb.y))+cl(v-vec2(cb.x,-cb.y))),0.,0.,1.);}";
+      "void main(){vec2 h=cb*.5,e=vec2(cb.x,-cb.y);" +
+      "o=vec4(.2*cl(v)+.12*(cl(v+cb)+cl(v-cb)+cl(v+e)+cl(v-e))+.08*(cl(v+vec2(h.x,0.))+cl(v-vec2(h.x,0.))+cl(v+vec2(0.,h.y))+cl(v-vec2(0.,h.y))),0.,0.,1.);}";
     // composite: refracted fish over the refracted shadow on the caustic-lit floor, then the reflection.
     // Refraction never reaches past the canvas (no smeared edge texels). Steep facets also catch the brighter
     // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
@@ -154,7 +157,7 @@
       "float mul=min(e,1.);vec3 add=lit*max(e-1.,0.)+ins*sh*k2.y;" +
       "add=add*(1.-f.a)+f.rgb*tr+ins*f.a*k2.x;mul*=1.-f.a;" +
       "vec3 n=normalize(vec3(-s,1.));float F=.02+.98*pow(1.-n.z,5.);vec2 r=2.*n.z*n.xy;" +
-      "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.25)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
+      "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.1)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
       "float d=(fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5)/255.;" +
       "o=vec4(add+d,1.-mul+d);}";
 
@@ -215,7 +218,7 @@
         RS = [cssW, cssH, pw, ph];
         if (Q) { pw = Math.max(1, Math.round(cssW)); ph = Math.max(1, Math.round(cssH)); }
         if (cssW === W_ && cssH === H_ && pw === c.width && ph === c.height) return;
-        var grid = Q ? 8 : 6;
+        grid = Q ? 8 : 6;
         W_ = cssW; H_ = cssH; c.width = pw; c.height = ph; c.style.width = cssW + "px"; c.style.height = cssH + "px";
         sw = Math.max(2, Math.ceil(cssW * SIM)); shh = Math.max(2, Math.ceil(cssH * SIM));
         [tW, tC, tB].forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, shh, 0, gl.RGBA, gl.HALF_FLOAT, null); });
@@ -228,7 +231,7 @@
         gl.bindVertexArray(vaoG); gl.bindBuffer(gl.ARRAY_BUFFER, gB); gl.bufferData(gl.ARRAY_BUFFER, V, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gI); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Ix, gl.STATIC_DRAW); gl.bindVertexArray(null);
       };
-      var gV = 0;
+      var gV = 0, grid = 6;
       var upload = function (t, src, wh) {
         gl.bindTexture(gl.TEXTURE_2D, t);
         if (wh[0] !== src.width || wh[1] !== src.height) { wh[0] = src.width; wh[1] = src.height; gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
@@ -278,12 +281,12 @@
           gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
           gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
           gl.useProgram(Pc.p); bindT(Pc, "Wt", 0, tW);
-          gl.uniform2f(Pc.u.ws, sw, shh); gl.uniform2f(Pc.u.vp, W_, H_); gl.uniform1f(Pc.u.D, look.cd); gl.uniform1f(Pc.u.E, 0.04);
+          gl.uniform2f(Pc.u.ws, sw, shh); gl.uniform2f(Pc.u.vp, W_, H_); gl.uniform1f(Pc.u.D, look.cd); gl.uniform1f(Pc.u.E, 0.04); gl.uniform2f(Pc.u.G, grid * 0.5 / W_, grid * 0.5 / H_);
           gl.uniform1f(Pc.u.px, (W_ / sw) * (H_ / shh));
           gl.bindVertexArray(vaoG); gl.drawElements(gl.TRIANGLES, gN, gl.UNSIGNED_INT, 0);
           gl.disable(gl.BLEND);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fB); gl.viewport(0, 0, sw, shh); gl.useProgram(Pb.p);
-          bindT(Pb, "C", 0, tC); gl.uniform2f(Pb.u.cb, look.cb / W_, look.cb / H_);
+          bindT(Pb, "C", 0, tC); var cr = Math.max(look.cb, grid); gl.uniform2f(Pb.u.cb, cr / W_, cr / H_);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           work.sim = sw * shh * 2; work.cau = gV;
         }
@@ -394,14 +397,14 @@
             wh: [226, 220, 208], wb: 1.32, wl: 0.3, wn: 0, pc: 0.8, ob: 1.42, sp: 0.065, fn: 0.7, gr: 0, eye: [20, 18, 16],
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
-            qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.62, 0.66, 0.7], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.55, qfr: 2.3, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.14, qamb: 1.1, qhz: 0 }
+            qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
+            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.3, qfr: 2.3, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.14, qamb: 1.1, qhz: 9 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.14, qfr: 1.3, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.11, qamb: 1.1, qhz: 0 };
+            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.14, qfr: 1.3, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.11, qamb: 1.1, qhz: 6 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
