@@ -394,6 +394,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
     var page = InkFish.mount(D.body, {
       fixed: true,
       ripples: true,
+      water: "real",
       koi: true,
       title: ".title h1",
       obstacles: ".code, .specimen",
@@ -406,7 +407,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
         { selector: ".opts", keep: 0.14, feather: 24 }
       ]
     });
-    var pond = InkFish.mount(D.getElementById("pond"), { count: 14, ripples: true, koi: 2 });
+    var pond = InkFish.mount(D.getElementById("pond"), { count: 14, ripples: true, water: "real", koi: 2 });
     var both = function (o) { if (page) page.set(o); if (pond) pond.set(o); };
 
     // theme: auto / light / dark (ink-fish watches <html data-theme> and cross-fades its ink)
