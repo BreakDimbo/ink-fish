@@ -946,7 +946,7 @@
       return k;
     };
 
-    var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), water: "flat", get dpr() { return dpr; } };
+    var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), water: "flat", gw: { n: 0, comp: 0, sim: 0, cau: 0, prof: 0, up: 0 }, get dpr() { return dpr; } };
     // colour strings are cached per colour and alpha step (1/1000), so a frame builds almost none
     var RGBC = {}, RGBN = 0, inkG = null, inkGc = "";
     var rgba = function (c, a) {
@@ -1312,7 +1312,7 @@
       }
       var live = !!(want && water && !water.lost);
       if (live !== realLive) for (var i = 0; i < rip.length; i++) rip[i].life = live ? WATER.life : RIP_LIFE;
-      if (live && !realLive) judgeReset(performance.now(), 1500); // shaders compile, textures settle
+      if (live && !realLive) judgeReset(performance.now(), 1000); // shaders compile, textures settle
       realLive = live;
       cv.style.display = shc.style.display = live ? "none" : "";
       if (water) water.canvas.style.display = live ? "" : "none";
@@ -1340,15 +1340,17 @@
       L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz;
       water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L);
       stats.wq = water.quality;
+      // GPU work, summed (pixels shaded / uploaded, caustic vertices), for QA: divide by gw.n
+      var gw = stats.gw, wk = water.work; gw.n++; gw.comp += wk.comp; gw.sim += wk.sim; gw.cau += wk.cau; gw.prof += wk.prof; gw.up += wk.up;
     };
 
     // ── real water on a slow GPU: measure, try the cheaper quality, and only then fall back ──
-    // Judged on the median frame interval of 1 s windows, skipping a 1.5 s warm-up, stalls (> 100 ms) and
-    // frames that followed a long main-thread task (the page's jank, not the GPU's). When slow, quality 1
+    // Judged on the median frame interval of 60-frame (or 2 s) windows, skipping a 1 s warm-up, resumes (> 1 s)
+    // and frames that followed a long main-thread task (the page's jank, not the GPU's). When slow, quality 1
     // (1 px per CSS px) is tried for a window: if that is clearly faster the GPU was the limit, so keep it,
     // or fall back to the flat water if it is still slow. If it is no faster (a 30 Hz power-saving cap, a busy
     // page), real water stays and the test backs off (10 s, 20 s, … 2 min). Below ~25 fps with no gain from
-    // quality 1, the flat water is tried once, for one window, the same way. A fallback is remembered for the tab
+    // quality 1 (or at once, below ~12 fps), the flat water is tried once, for one window, the same way. A fallback is remembered for the tab
     // session (30 min), so the next page of the site starts flat instead of janking again.
     var AJ = { st: 0, buf: [], warm: 0, m0: 0, next: 0, back: 10000, slow: 0, sus: 0 }, longAt = -1e9, SKEY = "ink-fish:water-fallback", lobs = null;
     try { if (typeof PerformanceObserver === "function") (lobs = new PerformanceObserver(function (l) { var e = l.getEntries(); for (var i = 0; i < e.length; i++) longAt = M.max(longAt, e[i].startTime + e[i].duration); })).observe({ type: "longtask" }); } catch (e) {}
@@ -1365,13 +1367,15 @@
       AJ.buf.push(M.min(gap, 250));
       return false;
     };
-    // the median of a window: 60 frames, or two seconds once there are 15 (so a slow device is judged as fast)
+    // the median of a window: 60 frames or two seconds; under ~12 fps, eight frames (and a second) are enough
     var judgeMed = function () {
       var B = AJ.buf, n = B.length, t = 0;
       for (var i = 0; i < n; i++) t += B[i];
-      if (n < 60 && !(n >= 15 && t > 2000)) return 0;
-      return B.slice().sort(function (x, y) { return x - y; })[n >> 1];
+      if (n < 8 || (n < 60 && t < 2000 && !(t > 800 && n >= 8))) return 0;
+      var m = B.slice().sort(function (x, y) { return x - y; })[n >> 1];
+      return n >= 60 || t >= 2000 || m > 80 ? m : 0;
     };
+    var flatTrial = function (now) { AJ.st = 2; AJ.tried = 1; waterFail = true; syncWater(); judgeReset(now, 500); AJ.flat = 1; };
     var judgeWater = function (now, gap) {
       if (judgeSkip(now, gap)) return;
       var m = judgeMed(); if (!m) return;
@@ -1380,11 +1384,12 @@
       if (AJ.st === 0) {
         if (!slow) { AJ.slow = 0; return; }
         if (now < AJ.next) return;
-        if (water.quality === 0) { AJ.m0 = m; AJ.st = 1; water.setQuality(1); judgeReset(now, 500); }
+        if (water.quality === 0 && m > 80 && !AJ.tried) { AJ.m0 = m; flatTrial(now); } // a few fps: straight to the flat trial
+        else if (water.quality === 0) { AJ.m0 = m; AJ.st = 1; water.setQuality(1); judgeReset(now, 500); }
         else if (++AJ.slow >= 3) fallBack(); // quality 1 was kept earlier and is slow again, three windows running
       } else if (AJ.st === 1) {
         if (m < AJ.m0 * 0.85) { if (slow) fallBack(); else AJ.st = 0; }
-        else if (AJ.m0 > 40 && !AJ.tried) { AJ.st = 2; AJ.tried = 1; waterFail = true; syncWater(); judgeReset(now, 500); AJ.flat = 1; }
+        else if (AJ.m0 > 40 && !AJ.tried) flatTrial(now);
         else { water.setQuality(0); AJ.st = 0; AJ.next = now + AJ.back; AJ.back = M.min(AJ.back * 2, 12e4); judgeReset(now, 500); }
       }
     };
