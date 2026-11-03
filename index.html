@@ -354,7 +354,7 @@ InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 1
           <tr class="grp"><td colspan="3" class="caps">Rendering</td></tr>
           <tr><td><code>mobileQuery</code></td><td><code>"(max-width: 720px)"</code></td><td>When it matches, mobile counts and sizes are used.</td></tr>
           <tr><td><code>maxDpr</code></td><td><code>1.5</code></td><td>Device-pixel-ratio cap.</td></tr>
-          <tr><td><code>adaptive</code></td><td><code>true</code></td><td>If frames keep arriving late: with real water, fall back to the flat water first; otherwise drop once to 1 device pixel per CSS pixel.</td></tr>
+          <tr><td><code>adaptive</code></td><td><code>true</code></td><td>If frames keep arriving late: with real water, try a cheaper water quality first, then the flat water, and keep whichever is really faster (a 30&thinsp;Hz cap or a slow page doesn’t demote it); otherwise drop once to 1 device pixel per CSS pixel.</td></tr>
           <tr><td><code>fadeIn</code></td><td><code>true</code></td><td>2.4&thinsp;s fade-in on first appearance.</td></tr>
         </tbody>
       </table>
