@@ -1402,13 +1402,18 @@
           if (rA < 1 && rB < 1) continue;
           var r2 = M.max(rA, rB), ak2 = en2 * [1, 0.5][wv] / (1 + r2 / 110);
           if (ak2 < 0.004) continue;
-          g.lineWidth = 1 + r2 * 0.006;
-          g.strokeStyle = rgba(wv ? rsRGB : rhRGB, ak2 * (wv ? pal.rsa : pal.rha));
+          var lw2 = 1 + r2 * 0.006;
           rA = M.max(0, rA); rB = M.max(0, rB);
-          g.beginPath();
-          g.moveTo(A1.x + tnx[a1 - 1] * rA * sd, A1.y - tsy2 + tny[a1 - 1] * rA * sd);
-          g.lineTo(B1.x + tnx[a1] * rB * sd, B1.y - tsy2 + tny[a1] * rB * sd);
-          g.stroke();
+          // like a ring's front: a hairline of shade on the stroke side, one of light outside it
+          for (var hl = wv ? 1 : 0; hl < 2; hl++) {
+            var oA = rA + (hl ? -lw2 * 0.6 : lw2 * 0.6) * (wv ? 0 : 1), oB = rB + (hl ? -lw2 * 0.6 : lw2 * 0.6) * (wv ? 0 : 1);
+            g.lineWidth = hl ? lw2 * 0.7 : lw2;
+            g.strokeStyle = rgba(hl ? rsRGB : rhRGB, ak2 * (hl ? pal.rsa : pal.rha));
+            g.beginPath();
+            g.moveTo(A1.x + tnx[a1 - 1] * M.max(0, oA) * sd, A1.y - tsy2 + tny[a1 - 1] * M.max(0, oA) * sd);
+            g.lineTo(B1.x + tnx[a1] * M.max(0, oB) * sd, B1.y - tsy2 + tny[a1] * M.max(0, oB) * sd);
+            g.stroke();
+          }
         }
       }
       // obstacles stay clean
