@@ -725,12 +725,12 @@
       if (!P.act) {
         var dx = x - P.x0, dy = y - P.y0, d = hyp(dx, dy);
         if (P.touch) {
-          if (now - P.t0 < 250 && d > 10 && M.abs(dy) > M.abs(dx) * 0.8) { press = null; return; } // a scroll
-          if (d < 8 && now - P.t0 < 250) return;
+          if (d < 8) return;
+          if (!P.held && M.abs(dy) > M.abs(dx) * 0.8) { press = null; return; } // moved before the hold, and not sideways: a scroll
         } else if (d < 6) return;
         P.act = true; trCut();
         if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.55; // a press that becomes a stroke: a softer splash, the line carries it
-        trl.push({ x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
+        trl.push(P.first = { x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
         trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); // the head follows the pointer until it is committed
         wake(); return;
       }
@@ -783,7 +783,14 @@
     }, { passive: true });
     var off = function () { ptr.on = false; trEnd(); };
     on(Wn, "pointerup", function (e) { if (press && e.pointerId === press.id) trEnd(); }, { passive: true });
-    on(Wn, "pointercancel", function (e) { if (press && e.pointerId === press.id) trEnd(); }, { passive: true });
+    on(Wn, "pointercancel", function (e) {
+      if (!press || e.pointerId !== press.id) return;
+      // the browser took the gesture (a scroll) right away: drop the stub rather than leave a dash
+      var i0 = press.first ? trl.indexOf(press.first) : -1, len = 0;
+      for (var i = i0 + 1; i0 >= 0 && i < trl.length; i++) if (trl[i].s > 0 && trl[i - 1].s > 0) len += hyp(trl[i].x - trl[i - 1].x, trl[i].y - trl[i - 1].y);
+      if (i0 >= 0 && len < 48) trl.length = i0;
+      trEnd();
+    }, { passive: true });
     on(D.documentElement, "pointerleave", off);
     on(Wn, "blur", off);
     var ignoreSel = function () { return [O.ignore, typeof O.obstacles === "string" ? O.obstacles : "", typeof O.bands === "string" ? O.bands : ""].filter(Boolean).join(","); };
@@ -795,7 +802,8 @@
       var o = origin(), x = e.clientX - o[0], y = e.clientY - o[1];
       if (!inside(x, y) || !free(x, y + sy, 4)) return;
       addRipple(x, y, 1, true); // a single, slightly stronger ring (touch: ripples on tap only)
-      if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { ring: rip[rip.length - 1], id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0 };
+      if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { ring: rip[rip.length - 1], id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0, held: false };
+      if (press && press.touch) { var P0 = press; setTimeout(function () { if (press === P0 && !P0.act) P0.held = true; }, 250); } // still for 250 ms = a hold
       ripLast.x = x; ripLast.y = y; ripLast.t = performance.now();
       for (var i = 0; i < fish.length; i++) {
         var f = fish[i], dx = f.x - x, dy = f.y - sy * f.pz - y, d = hyp(dx, dy);
