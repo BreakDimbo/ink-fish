@@ -1,4 +1,4 @@
-/*! ink-fish v1.2.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.2.1 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -94,6 +94,7 @@
 
     var vw = 0, vh = 0, dpr = 1, PW = 0, PH = 0, sy = page ? (Wn.scrollY || 0) : 0, heroB = 0, mobile = MOB.matches;
     var obs = [], walls = [], texts = [], title = null, fish = [], T = 0, dead = false, onScreen = true;
+    var hyp = function (x, y) { return M.sqrt(x * x + y * y); }; // Math.hypot is slow in V8
     var clamp = function (v, a, b) { return v < a ? a : v > b ? b : v; };
     var rnd = function (a, b) { return a + M.random() * (b - a); };
     var wrapA = function (a) { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; };
@@ -123,7 +124,7 @@
       // alpha; wb: the wash on a pale koi's body
       return dark
         ? { ink: [ink[0] * 0.94 + 10, ink[1] * 0.92 + 6, ink[2] * 0.86], a: 1.12 * op, sh: [0, 0, 0], sa: 0.26 * sh,
-            rs: [0, 0, 0], rsa: 0.5 * op, rh: [ink[0] * 0.86, ink[1] * 0.9, ink[2] * 0.94], rha: 0.07 * op,
+            rs: [0, 0, 0], rsa: 0.5 * op, rh: [ink[0] * 0.7, ink[1] * 0.78, ink[2] * 0.9], rha: 0.2 * op,
             cin: [168, 62, 42], cid: [110, 36, 26], och: [190, 148, 86], ocd: [146, 102, 48], sumi: [24, 22, 20], pa: 0.76 * op,
             wh: [226, 220, 208], wb: 1.32, wl: 0.3, pc: 0.8, ob: 1.42, sp: 0.065, fn: 0.7, gr: 0, eye: [20, 18, 16] }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
@@ -234,7 +235,7 @@
       // low harmonics bend the outline into lobes; the high ones scallop the rim like a brush edge
       H.push([2, R(0.04, 0.14) * rough, R(0, TAU)], [3, R(0.04, 0.11) * rough, R(0, TAU)], [5, R(0.02, 0.06) * rough, R(0, TAU)],
         [7, R(0.015, 0.035) * rough, R(0, TAU)], [9, R(0.008, 0.02) * rough, R(0, TAU)]);
-      var tilt = R(-0.35, 0.35), core = new Float32Array(PN * 2), inner = new Float32Array(PN * 2), outer = new Float32Array(PN * 2), feath = new Float32Array(PN * 2);
+      var tilt = R(-0.35, 0.35), core = new Float32Array(PN * 2), inner = new Float32Array(PN * 2), outer = new Float32Array(PN * 2);
       var bang = R(0, TAU), bx = M.cos(bang) * 0.16, by = M.sin(bang) * 0.16; // the side the wet edge bled toward
       var ic = R(-0.25, 0.25), cs = M.cos(tilt), sn = M.sin(tilt);
       for (var j = 0; j < PN; j++) {
@@ -243,13 +244,32 @@
         var x = M.cos(th), y = M.sin(th), xr = x * cs - y * sn, yr = x * sn + y * cs;
         core[j * 2] = s0 + ds * rr * xr; core[j * 2 + 1] = t0 + dt * rr * yr;
         // the bleed: a hair wider, with its own wobble, so the halo is not a constant offset
-        var ro = rr * (1.08 + 0.04 * M.sin(7 * th + H[1][2])), rf = rr * (1.2 + 0.07 * M.sin(5 * th + H[2][2]));
-        outer[j * 2] = s0 + ds * (ro * xr + bx * 0.5); outer[j * 2 + 1] = t0 + dt * (ro * yr + by * 0.5);
-        feath[j * 2] = s0 + ds * (rf * xr + bx); feath[j * 2 + 1] = t0 + dt * (rf * yr + by);
+        var ro = rr * (1.12 + 0.06 * M.sin(7 * th + H[1][2]) + 0.03 * M.sin(5 * th + H[2][2]));
+        outer[j * 2] = s0 + ds * (ro * xr + bx * 0.75); outer[j * 2 + 1] = t0 + dt * (ro * yr + by * 0.75);
         var ri = 0.5 + 0.1 * M.sin(3 * th + H[0][2]);
         inner[j * 2] = s0 + ds * (ic * 0.4 + rr * ri * xr); inner[j * 2 + 1] = t0 + dt * (ic + rr * ri * yr);
       }
-      return { c: c, core: core, inner: inner, outer: outer, feath: feath, tv: R(0, 1) };
+      return { c: c, core: core, inner: inner, outer: outer, tv: R(0, 1), s0: s0, ds: ds };
+    };
+    var mkBrush = function (r, s0, sd, len, sw, wk) {
+      // a sumi mark laid with a loaded brush: it lands off the flank, sweeps over the back and runs dry,
+      // so the body of the stroke is solid and the end splits into bristle streaks
+      var R = function (a, b) { return a + r() * (b - a); }, bow = R(-0.05, 0.05);
+      var line = function (u0, u1, ds, dt) {
+        var A = new Float32Array(14);
+        for (var j = 0; j < 7; j++) {
+          var u = u0 + (u1 - u0) * j / 6;
+          A[j * 2] = s0 + ds + sw * u + bow * M.sin(u * PI);
+          A[j * 2 + 1] = sd * (1.3 - u * len) + dt;
+        }
+        return A;
+      };
+      // full width while the brush is loaded, then lifting (narrower), then only the bristles
+      var ue = R(0.48, 0.6), M0 = [line(-0.1, ue, 0, 0)], T0 = [line(ue - 0.1, ue + R(0.14, 0.24), R(-0.25, 0.25) * wk, 0)];
+      if (r() < 0.6) M0.push(line(R(-0.1, 0.05), ue - R(0.05, 0.15), R(-1, 1) * wk * 0.45, 0));
+      var C0 = [line(R(0.0, 0.1), R(0.3, 0.45), R(-0.3, 0.3) * wk, 0)], B0 = [];
+      for (var b = 0; b < 5; b++) B0.push(line(ue - R(0.0, 0.18), ue + R(0.16, 0.5), (b / 4 - 0.5) * wk * 1.2 + R(-0.1, 0.1) * wk, R(-0.03, 0.03)));
+      return { c: 1, br: 1, m: M0, t: T0, k: C0, b: B0 };
     };
     var VARIETY = [
       { name: "kohaku", body: "pale", patch: function (r) {
@@ -269,11 +289,15 @@
         var R = function (a, b) { return a + r() * (b - a); }, P = [];
         P.push(mkPatch(r, 0, R(0.11, 0.16), R(-0.3, 0.3), R(0.06, 0.08), R(0.7, 1), 1.1));
         P.push(mkPatch(r, 0, R(0.42, 0.56), R(-0.5, 0.5), R(0.08, 0.11), R(0.7, 1.1), 1.2));
-        // sumi: brushy, from the flanks, and a wedge on the head
-        P.push(mkPatch(r, 1, R(0.05, 0.08), R(-0.35, 0.35), R(0.035, 0.05), R(0.35, 0.5), 1.4));
-        // sumi bands climb out of alternate flanks down the body, spaced so the white between them stays open
-        for (var k = 0, at = R(0.2, 0.28), sd = r() < 0.5 ? -1 : 1, n = 3 + (r() < 0.4); k < n && at < 0.8; k++, sd = -sd) {
-          P.push(mkPatch(r, 1, at, sd * R(0.45, 0.85), R(0.034, 0.06), R(0.7, 1.05), 2));
+        // sumi: brush strokes that climb out of alternate flanks and wrap over the back, one short one on the head;
+        // spaced so the white between them stays open
+        var sd = r() < 0.5 ? -1 : 1, hi = P.slice(), over = 0;
+        P.push(mkBrush(r, R(0.05, 0.08), sd, R(1.2, 1.6), R(0.02, 0.05), 0.03));
+        for (var k = 0, at = R(0.2, 0.27), n = 3 + (r() < 0.4); k < n && at < 0.82; k++, sd = -sd) {
+          // mostly laid in the white between the hi, so the two pigments read apart; one may cross a hi
+          for (var h = 0; h < hi.length; h++) if (M.abs(at - hi[h].s0) < hi[h].ds * 0.9 && over++) at = hi[h].s0 + hi[h].ds * 1.15;
+          if (at > 0.82) break;
+          P.push(mkBrush(r, at, sd, R(1.3, 2.2), R(-0.1, 0.12), 0.06));
           at += R(0.12, 0.19);
         }
         return P;
@@ -368,11 +392,11 @@
       if (e.pointerType === "touch") { ptr.on = false; return; }
       var o = origin(), cx = e.clientX - o[0], cy = e.clientY - o[1];
       var now = performance.now(), dt = M.max(8, now - ptr.t);
-      var sp = M.hypot(cx - ptr.x, cy - ptr.y) / dt * 1000;
+      var sp = hyp(cx - ptr.x, cy - ptr.y) / dt * 1000;
       ptr.sp = ptr.sp * 0.7 + sp * 0.3; ptr.x = cx; ptr.y = cy; ptr.t = now; ptr.idle = 0;
       ptr.on = inside(cx, cy) && free(cx, cy + sy, 6);
       if (ptr.on && O.ripples) {
-        var rd = M.hypot(cx - ripLast.x, cy - ripLast.y);
+        var rd = hyp(cx - ripLast.x, cy - ripLast.y);
         if (rd > 120 && now - ripLast.t > 340) { addRipple(cx, cy, clamp(0.34 + ptr.sp / 4200, 0.34, 0.62)); ripLast.x = cx; ripLast.y = cy; ripLast.t = now; }
       }
       wake();
@@ -391,7 +415,7 @@
       addRipple(x, y, 1); // a single, slightly stronger ring (touch: ripples on tap only)
       ripLast.x = x; ripLast.y = y; ripLast.t = performance.now();
       for (var i = 0; i < fish.length; i++) {
-        var f = fish[i], dx = f.x - x, dy = f.y - sy * f.pz - y, d = M.hypot(dx, dy);
+        var f = fish[i], dx = f.x - x, dy = f.y - sy * f.pz - y, d = hyp(dx, dy);
         if (d < 240 * (0.6 + f.d)) { f.a = wrapA(f.a + clamp(wrapA(M.atan2(dy, dx) - f.a), -1.4, 1.4) * 0.5); kick(f, 1); }
       }
     }, { passive: true });
@@ -406,6 +430,7 @@
       ptr.idle += dt;
       for (var ri = rip.length - 1; ri >= 0; ri--) { rip[ri].t += dt; if (rip[ri].t > RIP_LIFE || rm) rip.splice(ri, 1); }
       var gone = 0;
+      for (var ci = 0; ci < fish.length; ci++) { fish[ci].hc = M.cos(fish[ci].a); fish[ci].hs = M.sin(fish[ci].a); } // headings, for schooling
       for (var i = 0; i < fish.length; i++) {
         var f = fish[i], K = f.K, L = f.L, oy = sy * (1 - f.pz); // page y = layer y + oy
         var ca = M.cos(f.a), sa = M.sin(f.a);
@@ -422,7 +447,7 @@
             var dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
             if (d2 > R2) continue;
             var d = M.sqrt(d2) || 1;
-            n++; ax += M.cos(o.a); ay += M.sin(o.a); cx += dx; cy += dy;
+            n++; ax += o.hc; ay += o.hs; cx += dx; cy += dy;
             if (d < sep) { var k = (1 - d / sep); sx -= dx / d * k; sy2 -= dy / d * k; }
           }
           if (n) {
@@ -450,13 +475,13 @@
           }
           // the large fish give the headline room
           if (K.big && title) {
-            var tx = clamp(f.x, title.l, title.r), ty = clamp(f.y + oy, title.t, title.b), ex = f.x - tx, ey = f.y + oy - ty, de = M.hypot(ex, ey);
+            var tx = clamp(f.x, title.l, title.r), ty = clamp(f.y + oy, title.t, title.b), ex = f.x - tx, ey = f.y + oy - ty, de = hyp(ex, ey);
             if (de < 50) { fx += (de ? ex / de : 0) * 1.4 * (1 - de / 50); fy += (de ? ey / de : -1) * 1.4 * (1 - de / 50); }
           }
         }
         // cursor: a quick movement scatters them; a still cursor in open water draws the curious ones in
         if (ptr.on && !rm) {
-          var px = ptr.x, py = ptr.y + sy * f.pz, ex2 = f.x - px, ey2 = f.y - py, dp = M.hypot(ex2, ey2) || 1;
+          var px = ptr.x, py = ptr.y + sy * f.pz, ex2 = f.x - px, ey2 = f.y - py, dp = hyp(ex2, ey2) || 1;
           var reach = (130 + L) * (0.5 + f.d * 0.7);
           if (ptr.sp > 900 && ptr.idle < 0.15 && dp < reach) {
             fx += ex2 / dp * 4.5; fy += ey2 / dp * 4.5; if (f.mode === 0 || f.thT < 0.8) kick(f, 0.9 + 0.1 * f.d);
@@ -470,7 +495,7 @@
         }
         // a passing ring nudges the fish it crosses, outward
         for (var rj = 0; rj < rip.length; rj++) {
-          var rp = rip[rj], rr = ripR(rp), rcx = f.x - rp.x, rcy = (f.y - sy * f.pz) - (rp.y - sy * rpz()), rdd = M.hypot(rcx, rcy) || 1, del = rdd - rr;
+          var rp = rip[rj], rr = ripR(rp), rcx = f.x - rp.x, rcy = (f.y - sy * f.pz) - (rp.y - sy * rpz()), rdd = hyp(rcx, rcy) || 1, del = rdd - rr;
           if (del > -L * 0.5 && del < 16) { var ra0 = ripEnv(rp) * (1 - M.abs(del + L * 0.17) / (L * 0.67 + 16)); fx += rcx / rdd * ra0 * 1.6; fy += rcy / rdd * ra0 * 1.6; }
         }
         // a fast scroll is felt as a current: a few fish dart, the rest lean with it
@@ -497,7 +522,7 @@
         f.v += (vt - f.v) * M.min(1, dt * (vt > f.v ? 2.4 : 0.5));
         f.x += M.cos(f.a) * f.v * dt; f.y += M.sin(f.a) * f.v * dt;
         // tail beat: faster with speed and thrust, faster for small fish; wider when thrusting or turning
-        var fq = (0.3 + 2.3 * f.th + 0.8 * f.v / f.vmax) * M.pow(40 / L, 0.3);
+        var fq = (0.3 + 2.3 * f.th + 0.8 * f.v / f.vmax) * (f.fqL === L ? f.fqk : (f.fqL = L, f.fqk = M.pow(40 / L, 0.3)));
         f.ph += TAU * fq * dt;
         var at = L * (0.03 + 0.1 * f.th + 0.06 * M.min(1, M.abs(f.w)));
         f.amp += (at - f.amp) * M.min(1, dt * 4);
@@ -525,12 +550,15 @@
     };
     var BANK = 0;
     var kshape = function (s) { return s < 0.3 ? 0.64 + 0.36 * M.sin(s / 0.3 * PI / 2) : shape(s); };
+    // the spine has a fixed number of points, so both outlines are tabulated once
+    var SHP = new Float32Array(N), KSHP = new Float32Array(N);
+    for (var si = 0; si < N; si++) { SHP[si] = shape(si / (N - 1)); KSHP[si] = kshape(si / (N - 1)); }
     var spine = function (f, oy) {
       var n = f.n;
       for (var i = 0; i < n; i++) {
         var s = i / (n - 1), a = f.px[i], b = f.py[i] - oy;
         var i0 = i > 0 ? i - 1 : 0, i1 = i < n - 1 ? i + 1 : n - 1;
-        var tx = f.px[i0] - f.px[i1], ty = f.py[i0] - f.py[i1], tl = M.hypot(tx, ty) || 1;
+        var tx = f.px[i0] - f.px[i1], ty = f.py[i0] - f.py[i1], tl = hyp(tx, ty) || 1;
         var nx = -ty / tl, ny = tx / tl;
         var o = f.amp * (0.14 + 0.86 * s * s) * M.sin(f.ph - s * 5.4);
         CX[i] = a + nx * o; CY[i] = b + ny * o;
@@ -549,16 +577,16 @@
       var bank = clamp(f.w * 0.22, -0.3, 0.3); BANK = bank;
       for (var k = 0; k < n; k++) {
         var j0 = k > 0 ? k - 1 : 0, j1 = k < n - 1 ? k + 1 : n - 1;
-        var ux = CX[j0] - CX[j1], uy = CY[j0] - CY[j1], ul = M.hypot(ux, uy) || 1;
+        var ux = CX[j0] - CX[j1], uy = CY[j0] - CY[j1], ul = hyp(ux, uy) || 1;
         NX[k] = -uy / ul; NY[k] = ux / ul;
-        var w = f.L * f.K.wr * (f.K.color ? kshape : shape)(k / (n - 1)) * (1 - M.abs(bank) * 0.25);
+        var w = f.L * f.K.wr * (f.K.color ? KSHP : SHP)[k] * (1 - M.abs(bank) * 0.25);
         WD[k] = w;
         LX[k] = CX[k] + NX[k] * w * (1 + bank); LY[k] = CY[k] + NY[k] * w * (1 + bank);
         RX[k] = CX[k] - NX[k] * w * (1 - bank); RY[k] = CY[k] - NY[k] * w * (1 - bank);
       }
     };
     var bodyPath = function (c, f, sc, dx, dy) {
-      var n = f.n, hx = CX[0] - CX[1], hy = CY[0] - CY[1], hl = M.hypot(hx, hy) || 1;
+      var n = f.n, hx = CX[0] - CX[1], hy = CY[0] - CY[1], hl = hyp(hx, hy) || 1;
       var tn = f.K.color ? 0.035 : 0.05, tipX = CX[0] + hx / hl * f.L * tn, tipY = CY[0] + hy / hl * f.L * tn;
       c.moveTo((tipX + dx) * sc, (tipY + dy) * sc);
       c.quadraticCurveTo((LX[0] + dx) * sc, (LY[0] + dy) * sc, ((LX[0] + LX[1]) / 2 + dx) * sc, ((LY[0] + LY[1]) / 2 + dy) * sc);
@@ -567,6 +595,15 @@
       c.lineTo((RX[n - 1] + dx) * sc, (RY[n - 1] + dy) * sc);
       for (var k = n - 2; k > 0; k--) c.quadraticCurveTo((RX[k] + dx) * sc, (RY[k] + dy) * sc, ((RX[k] + RX[k - 1]) / 2 + dx) * sc, ((RY[k] + RY[k - 1]) / 2 + dy) * sc);
       c.quadraticCurveTo((RX[0] + dx) * sc, (RY[0] + dy) * sc, (tipX + dx) * sc, (tipY + dy) * sc);
+    };
+    var shadowPath = function (c, f, sc, dx, dy) {
+      // the shadow is drawn at quarter size and blurred, so a coarse polygon (every other spine point) is enough
+      var n = f.n, i;
+      c.moveTo((CX[0] + dx) * sc, (CY[0] + dy) * sc);
+      for (i = 1; i < n; i += 2) c.lineTo((LX[i] + dx) * sc, (LY[i] + dy) * sc);
+      c.lineTo((CX[n - 1] + dx) * sc, (CY[n - 1] + dy) * sc);
+      for (i = n - 2; i > 0; i -= 2) c.lineTo((RX[i] + dx) * sc, (RY[i] + dy) * sc);
+      c.closePath();
     };
     var tailPath = function (c, f, sc, dx, dy) {
       var n = f.n, e = n - 1, bx = CX[e], by = CY[e];
@@ -592,7 +629,7 @@
     var finPath = function (c, f, i, side, len, splay) {
       // a teardrop fin from the body edge, swept back, its tip trailing the stroke
       var bx = CX[i] + NX[i] * WD[i] * 0.8 * side, by = CY[i] + NY[i] * WD[i] * 0.8 * side;
-      var tx = CX[i] - CX[i + 1], ty = CY[i] - CY[i + 1], tl = M.hypot(tx, ty) || 1; tx /= tl; ty /= tl; // forward
+      var tx = CX[i] - CX[i + 1], ty = CY[i] - CY[i + 1], tl = hyp(tx, ty) || 1; tx /= tl; ty /= tl; // forward
       var bk = M.PI - splay, cs = M.cos(bk), sn = M.sin(bk) * side;
       var dx = tx * cs - ty * sn, dy = tx * sn + ty * cs; // rotate forward by (π − splay) towards the side
       var ex = bx + dx * len, ey = by + dy * len;
@@ -616,7 +653,13 @@
     };
 
     var stats = { n: 0, ms: 0, max: 0, drawn: 0, ring: new Float32Array(600), get dpr() { return dpr; } };
-    var rgba = function (c, a) { return "rgba(" + c + "," + M.max(0, a).toFixed(3) + ")"; };
+    // colour strings are cached per colour and alpha step (1/1000), so a frame builds almost none
+    var RGBC = {}, RGBN = 0, inkG = null, inkGc = "";
+    var rgba = function (c, a) {
+      var q = a <= 0 ? 0 : a >= 1 ? 1000 : (a * 1000 + 0.5) | 0, cc = RGBC[c];
+      if (!cc) { if (++RGBN > 48) { RGBC = {}; RGBN = 1; } cc = RGBC[c] = []; } // a theme cross-fade mints new colours
+      return cc[q] || (cc[q] = "rgba(" + c + "," + q / 1000 + ")");
+    };
     // ── painted koi ───────────────────────────────────────────────────────────
     // one small tile, made once: granulation, pigment settling into the paper's tooth
     var tile = function (n, paint) { var c = D.createElement("canvas"); c.width = c.height = n; paint(c.getContext("2d"), n); return c; };
@@ -644,7 +687,7 @@
       QX = CX[i] + (CX[i + 1] - CX[i]) * k + (NX[i] + (NX[i + 1] - NX[i]) * k) * w * t;
       QY = CY[i] + (CY[i + 1] - CY[i]) * k + (NY[i] + (NY[i + 1] - NY[i]) * k) * w * t;
     };
-    var RX2 = new Float32Array(64), RY2 = new Float32Array(64);
+    var RX2 = new Float32Array(64), RY2 = new Float32Array(64), DX = new Float32Array(N), DY = new Float32Array(N), DW = new Float32Array(N);
     var ring = function (P, F, A) {
       // a closed, smoothed outline through body-space points (quadratics between midpoints), added to P
       var n = A.length / 2;
@@ -652,6 +695,20 @@
       P.moveTo((RX2[n - 1] + RX2[0]) / 2, (RY2[n - 1] + RY2[0]) / 2);
       for (var k = 0; k < n; k++) { var kn = k + 1 < n ? k + 1 : 0; P.quadraticCurveTo(RX2[k], RY2[k], (RX2[k] + RX2[kn]) / 2, (RY2[k] + RY2[kn]) / 2); }
       P.closePath();
+    };
+    var stroke7 = function (P, F, A) {
+      // an open, smoothed line through 7 body-space points, added to P (t is not held inside here: the caller clips)
+      for (var j = 0; j < 7; j++) {
+        var s = A[j * 2], t = A[j * 2 + 1], e = F.n - 1;
+        if (s < 0.01) s = 0.01;
+        t *= t > 0 ? 1 + BANK : 1 - BANK;
+        var u = M.min(s, 1) * e, i = M.min(e - 1, u | 0), k = u - i, w = WD[i] + (WD[i + 1] - WD[i]) * k;
+        RX2[j] = CX[i] + (CX[i + 1] - CX[i]) * k + (NX[i] + (NX[i + 1] - NX[i]) * k) * w * t;
+        RY2[j] = CY[i] + (CY[i + 1] - CY[i]) * k + (NY[i] + (NY[i + 1] - NY[i]) * k) * w * t;
+      }
+      P.moveTo(RX2[0], RY2[0]);
+      for (var q = 1; q < 6; q++) P.quadraticCurveTo(RX2[q], RY2[q], (RX2[q] + RX2[q + 1]) / 2, (RY2[q] + RY2[q + 1]) / 2);
+      P.lineTo(RX2[6], RY2[6]);
     };
     var band = function (F, k) {
       // the body narrowed to k of its width, tapered shut at the snout: a band down the back
@@ -664,8 +721,8 @@
     };
     var koiFin = function (P, R, F, i, side, len, splay) {
       // a long rounded fan from the body edge, swept back; its rays drawn into R
-      var bx = CX[i] + NX[i] * WD[i] * 0.72 * side, by = CY[i] + NY[i] * WD[i] * 0.72 * side;
-      var tx = CX[i] - CX[i + 1], ty = CY[i] - CY[i + 1], tl = M.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      var bx = CX[i] + NX[i] * WD[i] * 0.88 * side, by = CY[i] + NY[i] * WD[i] * 0.88 * side; // rooted at the edge, so nothing shows through the body
+      var tx = CX[i] - CX[i + 1], ty = CY[i] - CY[i + 1], tl = hyp(tx, ty) || 1; tx /= tl; ty /= tl;
       var dir = function (a) { var bk = PI - a, cs = M.cos(bk), sn = M.sin(bk) * side; return [tx * cs - ty * sn, tx * sn + ty * cs]; };
       var d0 = dir(splay + 0.36), d1 = dir(splay - 0.3), dm = dir(splay + 0.05), dl = dir(splay + 0.5), dt2 = dir(splay - 0.42);
       P.moveTo(bx + tx * len * 0.12, by + ty * len * 0.12);
@@ -675,7 +732,7 @@
       P.closePath();
       for (var r = 0; r < 6; r++) {
         var dr = dir(splay + 0.3 - r * 0.115), lr = len * (0.86 + 0.1 * M.sin(r / 5 * PI));
-        R.moveTo(bx, by); R.lineTo(bx + dr[0] * lr, by + dr[1] * lr);
+        R.moveTo(bx + dr[0] * len * 0.14, by + dr[1] * len * 0.14); R.lineTo(bx + dr[0] * lr, by + dr[1] * lr);
       }
     };
     var koiTail = function (P, R, F) {
@@ -741,38 +798,63 @@
       // pigment, one colour at a time (sumi over cinnabar): a soft bleed, the wash, a darker wet rim where
       // it dried, a paler heart, then granulation
       var P = F.patch;
+      var BR = [];
       for (var pc = 0; pc < 2; pc++) {
-        var CP = null, OP = null, IP = null, XP = null, tv = 0, sumi = pc === 1;
+        var CP = null, OP = null, IP = null, tv = 0, sumi = pc === 1;
         for (var i = 0; i < P.length; i++) {
           var p = P[i];
           if (p.c !== pc) continue;
-          if (!CP) { CP = new Path2D(); OP = new Path2D(); IP = new Path2D(); XP = new Path2D(); tv = p.tv; }
-          ring(CP, F, p.core); if (!koiLite) { ring(OP, F, p.outer); ring(XP, F, p.feath); if (!sumi) ring(IP, F, p.inner); }
+          if (p.br) { BR.push(p); continue; }
+          if (!CP) { CP = new Path2D(); OP = new Path2D(); IP = new Path2D(); tv = p.tv; }
+          ring(CP, F, p.core); if (!koiLite) { ring(OP, F, p.outer); if (!sumi) ring(IP, F, p.inner); }
         }
         if (!CP) continue;
         var ca = (sumi ? fa * 0.84 : pa) * 0.93, col = sumi ? sumiRGB : cinRGB;
-        // the bleed: two thin, lopsided washes beyond the edge, feathering out on the side it ran toward
-        if (!koiLite) { g.fillStyle = rgba(col, ca * 0.08); g.fill(XP); g.fillStyle = rgba(col, ca * 0.16); g.fill(OP); }
+        // the bleed: a thin, lopsided wash beyond the edge, wider on the side it ran toward
+        if (!koiLite) { g.fillStyle = rgba(col, ca * 0.2); g.fill(OP); }
         // the wash itself is translucent, so the body's shading shows through, and it pools unevenly down the body
         var pk = ca * pal.pc * (sumi ? 0.86 : 1), pg = g.createLinearGradient(hx, hy, CX[e], CY[e]);
-        for (var q = 0; q < 5; q++) pg.addColorStop(q / 4, rgba(col, pk * (0.8 + 0.28 * M.sin(q * 2.1 + tv * TAU))));
+        for (var q = 0; q < 3; q++) pg.addColorStop(q / 2, rgba(col, pk * (0.8 + 0.28 * M.sin(q * 3.3 + tv * TAU))));
         g.fillStyle = pg; g.fill(CP);
         g.lineWidth = sumi ? 1.1 : 0.9; g.lineJoin = "round"; g.strokeStyle = rgba(sumi ? sumiRGB : cidRGB, ca * (sumi ? 0.24 : 0.32)); g.stroke(CP);
         if (koiLite) continue;
         if (!sumi) { g.fillStyle = rgba(whRGB, ca * pal.wl * 0.26); g.fill(IP); }
-        if (grainP && pal.gr > 0) { patTo(grainP, hx, hy, ha, 0.6); g.globalAlpha = sumi ? pal.gr * 0.7 : pal.gr; g.fillStyle = grainP; g.fill(CP); g.globalAlpha = 1; }
+        // granulation: the tile at device scale and on whole device pixels, the cheapest pattern to rasterise
+        if (grainP && pal.gr > 0) { patTo(grainP, M.round(hx * dpr) / dpr, M.round(hy * dpr) / dpr, 0, 1 / dpr); g.globalAlpha = sumi ? pal.gr * 0.7 : pal.gr; g.fillStyle = grainP; g.fill(CP); g.globalAlpha = 1; }
+      }
+      if (BR.length) {
+        // sumi brushwork, clipped to the body so the strokes wrap off the flanks: a loaded stroke, a darker
+        // pool where the brush pressed, and the dry streaks it trails; the layers overlap at different strengths
+        var MP = new Path2D(), TP = new Path2D(), KP = new Path2D(), DP = new Path2D(), sa = fa * 0.84 * 0.93;
+        for (var bi = 0; bi < BR.length; bi++) {
+          var bq = BR[bi], bj;
+          for (bj = 0; bj < bq.m.length; bj++) stroke7(MP, F, bq.m[bj]);
+          for (bj = 0; bj < bq.k.length; bj++) stroke7(KP, F, bq.k[bj]);
+          stroke7(TP, F, bq.t[0]);
+          if (!koiLite) for (bj = 0; bj < bq.b.length; bj++) stroke7(DP, F, bq.b[bj]);
+        }
+        g.save(); g.clip(BP);
+        g.lineCap = "round"; g.lineJoin = "round";
+        if (!koiLite) { g.strokeStyle = rgba(sumiRGB, sa * 0.1); g.lineWidth = F.L * 0.12; g.stroke(MP); }
+        g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.95); g.lineWidth = F.L * 0.088; g.stroke(MP);
+        g.lineWidth = F.L * 0.05; g.stroke(TP);
+        if (!koiLite) { g.lineCap = "butt"; g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.5); g.lineWidth = F.L * 0.006 + 0.35; g.stroke(DP); g.lineCap = "round"; }
+        g.strokeStyle = rgba(sumiRGB, sa * pal.pc * 0.42); g.lineWidth = F.L * 0.05; g.stroke(KP);
+        g.restore();
       }
       // outline, as on paper
       g.strokeStyle = rgba(inkRGB, al * (gold ? 0.3 : 0.46));
       g.lineWidth = 0.75; g.stroke(BP);
-      // dorsal fin: a soft stroke down the back that flops a little with the beat
+      // dorsal fin: a long, thin leaf down the back, fullest at its root and trailing off; it flops a little with the beat
       g.lineCap = "round";
-      g.strokeStyle = rgba(gold ? ocdRGB : inkRGB, gold ? pa * 0.32 : al * 0.2);
-      g.lineWidth = F.L * 0.022;
+      g.fillStyle = rgba(gold ? ocdRGB : inkRGB, gold ? pa * 0.3 : al * 0.17);
       g.beginPath();
-      var df = M.sin(F.ph - 2.4) * 0.12;
-      for (var s = 3; s <= 6; s++) { var wv = WD[s] * df * (s - 2) / 4, x = CX[s] + NX[s] * wv, y = CY[s] + NY[s] * wv; if (s === 3) g.moveTo(x, y); else g.lineTo(x, y); }
-      g.stroke();
+      var df = M.sin(F.ph - 2.4) * 0.12, dw = F.L * 0.014;
+      for (var s = 3; s <= 7; s++) { var wv = WD[s] * df * (s - 2) / 4, hw = dw * M.sin((s - 2.7) / 4.3 * PI) * (s < 4 ? 0.7 : 1); DX[s] = CX[s] + NX[s] * wv; DY[s] = CY[s] + NY[s] * wv; DW[s] = hw; }
+      g.moveTo(DX[3] - NX[3] * DW[3], DY[3] - NY[3] * DW[3]);
+      for (var s1 = 3; s1 <= 7; s1++) g.lineTo(DX[s1] + NX[s1] * DW[s1], DY[s1] + NY[s1] * DW[s1]);
+      for (var s2 = 6; s2 >= 3; s2--) g.lineTo(DX[s2] - NX[s2] * DW[s2], DY[s2] - NY[s2] * DW[s2]);
+      g.fill();
       // barbels and eyes
       var fx = M.cos(ha), fy = M.sin(ha), nx0 = -fy, ny0 = fx, bl = F.L * 0.05;
       g.lineWidth = 0.6; g.strokeStyle = rgba(inkRGB, al * 0.4);
@@ -782,7 +864,7 @@
         g.moveTo(bx0, by0); g.quadraticCurveTo(bx0 + fx * bl * 0.5 + nx0 * bl * 0.5 * sd, by0 + fy * bl * 0.5 + ny0 * bl * 0.5 * sd, bx0 - fx * bl * 0.15 + nx0 * bl * 0.95 * sd, by0 - fy * bl * 0.15 + ny0 * bl * 0.95 * sd);
       }
       g.stroke();
-      g.fillStyle = "rgba(" + rgb(pal.eye) + "," + M.min(1, 0.85 * fa).toFixed(3) + ")";
+      g.fillStyle = rgba(rgb(pal.eye), M.min(1, 0.85 * fa));
       g.beginPath();
       var er = M.max(0.8, F.L * 0.012), ex = CX[0] * 0.62 + CX[1] * 0.38, ey = CY[0] * 0.62 + CY[1] * 0.38, ew = WD[1] * 0.7;
       g.moveTo(ex + NX[0] * ew + er, ey + NY[0] * ew); g.arc(ex + NX[0] * ew, ey + NY[0] * ew, er, 0, TAU);
@@ -807,41 +889,23 @@
       }
       sg.setTransform(1, 0, 0, 1, 0, 0);
       sg.clearRect(0, 0, shc.width, shc.height);
-      if (pal.sa > 0) {
-        sg.fillStyle = "rgba(0,0,0," + pal.sa.toFixed(3) + ")";
-        // shadows: mid and near fish cast a soft shadow on the paper, offset by their height under the lamp
-        sg.beginPath();
-        for (var i = 0; i < fish.length; i++) {
-          var f = fish[i];
-          if (f.k === 0) continue;
-          var oy = sy * f.pz, sx0 = f.x, sy0 = f.y - oy;
-          if (sx0 < -f.L * 2 || sx0 > vw + f.L * 2 || sy0 < -f.L * 2 || sy0 > vh + f.L * 2) { f.vis = 0; continue; }
-          spine(f, oy);
-          var h = 3 + f.d * 9;
-          bodyPath(sg, f, SH, h * 0.55, h);
-        }
-        sg.fill();
-        sg.globalCompositeOperation = "destination-out";
-        sg.fillStyle = "#000";
-        for (var so = 0; so < obs.length; so++) {
-          var SR = obs[so];
-          if (SR.b - sy < 0 || SR.t - sy > vh) continue;
-          sg.fillRect((SR.l - 2) * SH, (SR.t - sy - 2) * SH, (SR.r - SR.l + 4) * SH, (SR.b - SR.t + 4) * SH);
-        }
-        sg.globalCompositeOperation = "source-over";
-      }
+      // shadows: mid and near fish cast a soft shadow on the paper, offset by their height under the lamp;
+      // their outlines are gathered in the fish loop below (one spine per fish per frame) and filled after it
+      var shd = pal.sa > 0;
+      sg.beginPath();
 
       for (var qq = 0; qq < fish.length; qq++) {
         var F = fish[qq], oy2 = sy * F.pz, hx = F.x, hy = F.y - oy2;
         if (hx < -F.L * 2 || hx > vw + F.L * 2 || hy < -F.L * 2 || hy > vh + F.L * 2) continue;
         drawn++;
         spine(F, oy2);
+        if (shd && F.k !== 0) { var h = 3 + F.d * 9; shadowPath(sg, F, SH, h * 0.55, h); }
         var fa = F.fade * fadeAt(CX[3], CY[3]), al = F.tone * alphaAll * fa;
         if (al < 0.004) continue;
         var e = F.n - 1;
         if (F.K.color) { drawKoi(F, al, fa); continue; }
         // fins first, paler than the body (ink thinned with water)
-        g.fillStyle = "rgba(" + inkRGB + "," + (al * 0.5).toFixed(3) + ")";
+        g.fillStyle = rgba(inkRGB, (al * 0.5));
         g.beginPath();
         var tail = tailPath(g, F, 1, 0, 0);
         if (F.K.fins) {
@@ -854,17 +918,19 @@
         }
         g.fill();
         // body: ink pooled at the head and along the back, washing out toward the tail
-        var gr = g.createLinearGradient(CX[0], CY[0], CX[e], CY[e]);
-        gr.addColorStop(0, "rgba(" + inkRGB + "," + (al * 1.05).toFixed(3) + ")");
-        gr.addColorStop(0.45, "rgba(" + inkRGB + "," + (al * 0.82).toFixed(3) + ")");
-        gr.addColorStop(1, "rgba(" + inkRGB + "," + (al * 0.5).toFixed(3) + ")");
-        g.fillStyle = gr;
+        // one shared unit gradient, laid along each fish by the transform at fill time (the path is already placed)
+        if (inkGc !== inkRGB) { inkG = g.createLinearGradient(0, 0, 1, 0); inkG.addColorStop(0, rgba(inkRGB, 1)); inkG.addColorStop(1, rgba(inkRGB, 0.5 / 1.05)); inkGc = inkRGB; }
+        g.fillStyle = inkG;
         g.beginPath();
         bodyPath(g, F, 1, 0, 0);
+        var gx = (CX[e] - CX[0]) * dpr, gy = (CY[e] - CY[0]) * dpr;
+        g.globalAlpha = M.min(1, al * 1.05);
+        g.setTransform(gx, gy, -gy, gx, CX[0] * dpr, CY[0] * dpr);
         g.fill();
+        g.setTransform(dpr, 0, 0, dpr, 0, 0); g.globalAlpha = 1;
         if (F.k > 0) {
           // the dorsal ridge: one darker brush stroke down the back
-          g.strokeStyle = "rgba(" + inkRGB + "," + (al * 0.55).toFixed(3) + ")";
+          g.strokeStyle = rgba(inkRGB, (al * 0.55));
           g.lineWidth = F.L * (F.K.big ? 0.03 : 0.026);
           g.lineCap = "round";
           g.beginPath();
@@ -874,7 +940,7 @@
           if (F.K.big) {
             // fine rays in the tail
             g.lineWidth = 0.6;
-            g.strokeStyle = "rgba(" + inkRGB + "," + (al * 0.38).toFixed(3) + ")";
+            g.strokeStyle = rgba(inkRGB, (al * 0.38));
             g.beginPath();
             for (var r2 = -1; r2 <= 1; r2 += 0.5) {
               var ra = tail[2] + r2 * tail[4] * 0.85, rl = tail[3] * (0.62 + 0.3 * M.abs(r2));
@@ -883,7 +949,7 @@
             g.stroke();
           }
           // eyes
-          g.fillStyle = "rgba(" + inkRGB + "," + M.min(1, al * 1.9).toFixed(3) + ")";
+          g.fillStyle = rgba(inkRGB, M.min(1, al * 1.9));
           g.beginPath();
           var er = M.max(0.7, F.L * 0.014);
           var ex = (CX[0] * 0.7 + CX[1] * 0.3), ey = (CY[0] * 0.7 + CY[1] * 0.3), ew = WD[1] * 0.62;
@@ -892,6 +958,19 @@
           g.fill();
         }
       }
+      if (shd) {
+        sg.fillStyle = rgba("0,0,0", pal.sa);
+        sg.fill();
+        sg.globalCompositeOperation = "destination-out";
+        sg.fillStyle = "#000";
+        for (var so = 0; so < obs.length; so++) {
+          var SR = obs[so];
+          if (SR.b - sy < 0 || SR.t - sy > vh) continue;
+          sg.fillRect((SR.l - 2) * SH, (SR.t - sy - 2) * SH, (SR.r - SR.l + 4) * SH, (SR.b - SR.t + 4) * SH);
+        }
+        sg.globalCompositeOperation = "source-over";
+      }
+
       // water rings: a hairline of shade on the inner slope, a hairline of light on the outer one
       if (fronts.length) {
         g.lineCap = "butt";
@@ -899,11 +978,11 @@
           var W0 = fronts[fq], lw = (1 + W0.r * 0.007) * W0.w, qx = M.cos(W0.q) * lw * 0.45, qy = M.sin(W0.q) * lw * 0.45;
           // two hairlines a little off-centre from each other: the ring thickens on one side, thins on the other
           g.lineWidth = lw * 0.7;
-          g.strokeStyle = "rgba(" + rsRGB + "," + (W0.a * pal.rsa).toFixed(4) + ")";
+          g.strokeStyle = rgba(rsRGB, (W0.a * pal.rsa));
           g.beginPath(); g.arc(W0.x, W0.y, M.max(0.5, W0.r - lw * 0.55), 0, TAU); g.stroke();
           g.beginPath(); g.arc(W0.x + qx, W0.y + qy, M.max(0.5, W0.r - lw * 0.75), 0, TAU); g.stroke();
           g.lineWidth = lw;
-          g.strokeStyle = "rgba(" + rhRGB + "," + (W0.a * pal.rha).toFixed(4) + ")";
+          g.strokeStyle = rgba(rhRGB, (W0.a * pal.rha));
           g.beginPath(); g.arc(W0.x - qx * 0.6, W0.y - qy * 0.6, W0.r + lw * 0.6, 0, TAU); g.stroke();
         }
       }
@@ -1075,5 +1154,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.1.0" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.2.1" };
 });
