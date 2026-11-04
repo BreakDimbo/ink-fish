@@ -436,13 +436,13 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.3, qfr: 2.3, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.14, qamb: 1.1, qhz: 9 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.34, qfr: 2.6, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.15, qamb: 1.1, qhz: 9 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 22, qsd: 40, qcd: 40, qcb: 5, qcs: 0.14, qfr: 1.3, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.11, qamb: 1.1, qhz: 6 };
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.8, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.6, qhz: 6 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
