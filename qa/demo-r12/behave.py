@@ -1,4 +1,5 @@
 # eyeball + numeric check of the grid wake's calm-sleep, hidden-pause and scroll behaviour (deterministic clock)
+import sys as _s; _s.path.insert(0, "/workspace/ink-fish/qa"); import qahooks  # release build ships no QA hooks; splice them back for tests
 import asyncio, os, json
 from playwright.async_api import async_playwright
 src = open("/workspace/ink-fish/qa/demo-r12/drag.py").read()
@@ -12,6 +13,7 @@ async def main():
             pg = await b.new_page(viewport={"width": 1440, "height": 900}, color_scheme=theme); errs = []
             pg.on("pageerror", lambda e: errs.append(str(e)))
             await pg.add_init_script(INIT)
+            await qahooks.install(pg)
             async def route(r):
                 resp = await r.fetch(); body = await resp.text()
                 await r.fulfill(response=resp, body=body.replace('water: "real",', 'water: "real", adaptive: false,'))

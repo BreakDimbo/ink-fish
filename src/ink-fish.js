@@ -185,9 +185,8 @@
     // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
     // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
-    var GRID_P = 0.02, GRID_GAIN = (typeof window !== "undefined" && window.__inkFishGridGain) || 150; // QA hook: window.__inkFishGridGain
+    var GRID_P = 0.02, GRID_GAIN = 150;
     var GRID = { c2: 0.19, b: 0.03, k: 0.03, mu: 0.006, damp: 0.991, R: 2.0, rate: 120, life: 2.0, fade: 0.45 };
-    if (typeof window !== "undefined" && window.__inkFishGrid) for (var gk_ in window.__inkFishGrid) GRID[gk_] = window.__inkFishGrid[gk_]; // QA hook
     // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 3.47, must stay under 2(1 + a) with a the
     // per-step velocity retention (damping × viscosity × sponge, ≥ 0.77 at the border): 3.55
     var FS_GSTEP = HEAD + "uniform sampler2D Gt;uniform vec4 Sg,Pa;uniform vec2 gz;out vec4 o;" +
@@ -456,12 +455,6 @@
       };
       var api = {
         canvas: c, resize: resize, draw: draw, work: work,
-        // QA only: the half-res surface (slope magnitude percentiles) and whether the wake field is awake
-        peek: function (full) { var b = new Float32Array(sw * shh * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.readPixels(0, 0, sw, shh, gl.RGBA, gl.FLOAT, b); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-          var m = []; for (var i = 0; i < b.length; i += 4) m.push(Math.hypot(b[i + 1], b[i + 2])); m.sort(function (x, y) { return x - y; });
-          var g = new Float32Array(gx * gy * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fG[gi]); gl.readPixels(0, 0, gx, gy, gl.RGBA, gl.FLOAT, g); gl.bindFramebuffer(gl.FRAMEBUFFER, null); var gm = 0; for (i = 0; i < g.length; i += 4) gm = Math.max(gm, Math.abs(g[i]));
-          if (full) { var hh = new Array(gx * gy); for (i = 0; i < gx * gy; i++) hh[i] = Math.round(g[i * 4] * 1e4) / 1e4; return { gx: gx, gy: gy, h: hh }; }
-          return { hmax: gm, gpr: gPr, gpx: gPx, gpy: gPy, p50: m[m.length >> 1], p99: m[Math.floor(m.length * 0.99)], p999: m[Math.floor(m.length * 0.999)], max: m[m.length - 1], grid: gLive, T: gT, last: gLast }; },
         get lost() { return lost; },
         get quality() { return Q; },
         setQuality: function (q) { q = q ? 1 : 0; if (q === Q) return; Q = q; W_ = -1; resize(RS[0], RS[1], RS[2], RS[3]); },
@@ -1835,7 +1828,6 @@
         var i = instances.indexOf(api); if (i >= 0) instances.splice(i, 1);
       }
     };
-    Object.defineProperty(api, "_peek", { value: function (full) { return water && realLive ? water.peek(full) : null; } }); // QA only
     host.__inkFish = api;
     instances.push(api);
     return api;

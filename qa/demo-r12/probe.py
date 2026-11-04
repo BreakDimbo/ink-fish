@@ -1,4 +1,5 @@
 # quick look + slope stats for the v1.5 prototype: probe.py THEME KIND TIMES(comma) TAG
+import sys as _s; _s.path.insert(0, "/workspace/ink-fish/qa"); import qahooks  # release build ships no QA hooks; splice them back for tests
 import asyncio, sys, os, json
 sys.argv_saved = list(sys.argv)
 from playwright.async_api import async_playwright
@@ -19,6 +20,7 @@ async def main():
         pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
         pg.on("pageerror", lambda e: errs.append("pageerror: " + str(e)))
         await pg.add_init_script(INIT + ";window.__inkFishGridGain=" + os.environ.get("GG","0") + ";window.__inkFishGrid=" + os.environ.get("GRID","null"))
+        await qahooks.install(pg)
         async def route(r):
             resp = await r.fetch(); body = await resp.text()
             await r.fulfill(response=resp, body=body.replace('water: "real",', 'water: "real", adaptive: false,'))
