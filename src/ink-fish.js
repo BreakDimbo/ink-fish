@@ -824,12 +824,12 @@
     // RIP_MAX rings the oldest is retired over 0.8 s, never cut. A click may exceed the budget; a move may not.
     var RIP_SUM = 1.05;
     var ripLoad = function () { var u = 0; for (var i = 0; i < rip.length; i++) { var r = rip[i]; if (!r.die) u += r.s * r.e * M.max(0, 1 - r.t / r.life); } return u; };
-    var addRipple = function (x, y, s, firm) {
+    var addRipple = function (x, y, s, firm, q) {
       if (!O.ripples || RM.matches) return false;
       if (!firm) { s = M.min(s, RIP_SUM - ripLoad()); if (s < 0.12) return false; }
       var live = 0;
       for (var i = rip.length - 1; i >= 0; i--) if (!rip[i].die && ++live >= RIP_MAX) rip[i].die = 1;
-      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s, e: 1, q: rnd(0, TAU), life: ripLife() });
+      rip.push({ x: x, y: y + sy * rpz(), t: 0, s: s, e: 1, q: q != null ? q : rnd(0, TAU), life: ripLife() });
       wake();
       return true;
     };
@@ -856,7 +856,7 @@
         var age = (performance.now() - P.t0) / 1000;
         if (age < CLK_SWAP) {
           var ci = clk.indexOf(P.clk); if (ci >= 0) clk.splice(ci, 1);
-          if (addRipple(P.x0, P.y0, 1, true)) { P.ring = rip[rip.length - 1]; P.ring.t = age; }
+          if (P.clk && addRipple(P.x0, P.y0, 1, true, P.clk.q)) { P.ring = rip[rip.length - 1]; P.ring.y = P.clk.y; P.ring.t = age; } // same phase and spot as the click ring: the random stream stays as in v1.5.0
         } else { P.t0 = performance.now(); P.x0 = x; P.y0 = y; }
         if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.4; // a press that becomes a stroke: a softer splash, the line carries it
         P.s = 1e-3; trl.push(P.first = { // ~0, not 0: s = 0 marks a separator, and the stroke must still grow from here
