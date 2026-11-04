@@ -412,7 +412,7 @@
           gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
           bindT(Ps, "P", 0, tP);
           gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
-          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); bindT(Ps, "Gt", 1, tG[gi]); gl.uniform2f(Ps.u.gz, gx, gy); gl.uniform4f(Ps.u.Gp, gc, gk * look.ring * (look.trail || 1) * GRID_GAIN, 0, 0); var cp4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Ps.u.Cp, look.rv || 0, 0, cp4[2] > 0.5 ? 1 : 0, 0); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.26 * 13 / 0.858 : 0, 13);
+          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); bindT(Ps, "Gt", 1, tG[gi]); gl.uniform2f(Ps.u.gz, gx, gy); gl.uniform4f(Ps.u.Gp, gc, gk * look.ring * (look.gg || 1) * GRID_GAIN, 0, 0); var cp4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Ps.u.Cp, look.rv || 0, 0, cp4[2] > 0.5 ? 1 : 0, 0); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.26 * 13 / 0.858 : 0, 13);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
           gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -540,7 +540,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.05, 0.014, 1, 0], qrv: 0.33, qdmc: 1, qwv: 0.02 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.10, 0.025, 1, 0], qrv: 0.33, qgg: 2.5, qdmc: 1, qwv: 0.02 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
@@ -1591,7 +1591,7 @@
       }
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
-      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0; L.wv = pal.qwv; L.rv = pal.qrv || 0;
+      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0; L.wv = pal.qwv; L.rv = pal.qrv || 0; L.gg = pal.qgg || 1;
       var tn = 0, tsy = sy * rpz();
       for (var q = 0; q < trl.length && tn < TRL_N; q++, tn++) {
         var tp = trl[q], ta = trA.a;

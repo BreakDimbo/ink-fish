@@ -36,7 +36,7 @@ async def main():
                 if not pr and down: await pg.mouse.up(); down = False
             await pg.evaluate("__step(1000/30)")
             if any(abs(i / 30 - t) < 1e-6 or (i == round(t * 30)) for t in times):
-                pk = await pg.evaluate("document.body.__inkFish._peek()")
+                pk = await pg.evaluate("document.body.__inkFish._peek ? document.body.__inkFish._peek() : null")
                 await pg.screenshot(path=f"{OUT}/t{i/30:.2f}.png")
                 res.append({"t": round(i / 30, 2), **(pk or {})}); print(json.dumps(res[-1]), flush=True)
         print("errors:", errs, "water:", await pg.evaluate("document.body.__inkFish.water"), flush=True)
