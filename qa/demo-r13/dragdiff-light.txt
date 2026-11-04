@@ -1,0 +1,24 @@
+f000 mean 0.000  >8: 0.000 %  max 0
+f014 mean 0.000  >8: 0.000 %  max 0
+f015 mean 0.371  >8: 0.521 %  max 91
+f016 mean 0.014  >8: 0.049 %  max 25
+f017 mean 0.013  >8: 0.020 %  max 23
+f030 mean 0.118  >8: 0.029 %  max 13
+f045 mean 0.175  >8: 0.000 %  max 8
+f060 mean 0.155  >8: 0.000 %  max 5
+f075 mean 0.120  >8: 0.000 %  max 4
+f090 mean 0.088  >8: 0.000 %  max 3
+f105 mean 0.064  >8: 0.000 %  max 3
+f120 mean 0.047  >8: 0.000 %  max 3
+f135 mean 0.034  >8: 0.000 %  max 3
+f150 mean 0.026  >8: 0.000 %  max 3
+f165 mean 0.015  >8: 0.000 %  max 2
+f180 mean 0.346  >8: 0.458 %  max 101
+f195 mean 0.081  >8: 0.000 %  max 6
+f210 mean 0.125  >8: 0.000 %  max 4
+f225 mean 0.114  >8: 0.000 %  max 3
+f240 mean 0.088  >8: 0.000 %  max 3
+f255 mean 0.034  >8: 0.000 %  max 3
+f270 mean 0.000  >8: 0.000 %  max 0
+f285 mean 0.000  >8: 0.000 %  max 0
+ALL mean 0.068, worst frame mean 0.371 (f15), median >8: 0.000 %

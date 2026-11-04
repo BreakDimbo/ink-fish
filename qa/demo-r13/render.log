@@ -1,0 +1,13 @@
+click v150 light 0
+click v121 light 0
+click v130 light 0
+click new light 0
+drag v150 light 0
+drag new light 0
+click v150 dark 0
+click v121 dark 0
+click v130 dark 0
+click new dark 0
+drag v150 dark 0
+drag new dark 0
+RENDERDONE
