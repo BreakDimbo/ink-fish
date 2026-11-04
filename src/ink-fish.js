@@ -158,33 +158,49 @@
       "float l=0.;for(int k=0;k<" + NK + ";k++){float f=texelFetch(F,ivec2(k,c.y),0).r,kp=(float(k)+.5)*" + DK.toFixed(9) + ";vec2 j=texelFetch(J,ivec2(c.x,k),0).rg;s+=f*j;l-=f*kp*kp*j.x;}o=vec4(s,l,1.);}";
     // (.b: the Laplacian, ∇²J0(kr) = −k²J0(kr) and (cos kx)'' = −k² cos kx: it marks each crest, finest the sharpest)
     // the surface at half resolution: height, slope (screen axes, y down) and where water shows
-    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "],Dm,Cp,Q[" + SLOTS + "];uniform int nR,nS;uniform float LA,WV;in vec2 v;out vec4 o;" +
+    // v1.5: rings stay closed-form; a press-and-drag is no longer a drawn line but a moving pressure on a small
+    // stepped height field (GRID below), sampled here and added to the ring slope
+    var FS_SIM = HEAD + "uniform sampler2D P,Gt;uniform vec2 vp,gz;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],Dm,Cp,Gp;uniform int nR;in vec2 v;out vec4 o;" +
+      "float gh(vec2 c){return texture(Gt,c/gz).x;}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;float h=0.;vec2 s=vec2(0.);" +
-      "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}vec2 s0=s;float cv=0.,cd=0.;" +
+      "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}float cv=0.;" +
       "for(int i=0;i<" + SLOTS + ";i++){vec4 q=I[i];if(q.w==0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + RMAX.toFixed(1) + ")continue;" +
-      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rgb*q.w;h+=e.x;s+=e.y*d/max(r,.001);cv+=e.z;vec4 qq=Q[i];cd+=e.z*qq.y*smoothstep(qq.x+45.,qq.x+95.,r);}" +
-      // the trail: the nearest point of the stroke polyline gives the distance, the age there and the strength
-      "if(nS>1){float bd=1e9,ba=0.,bs=0.;vec2 bv=vec2(0.);for(int i=1;i<" + NS + ";i++){if(i>=nS)break;vec4 a=S[i-1],b=S[i];if(a.w<=0.||b.w<=0.)continue;" +
-      "vec2 ab=b.xy-a.xy,ap=p-a.xy;float u=clamp(dot(ap,ab)/max(dot(ab,ab),1e-3),0.,1.);vec2 dv=ap-ab*u;float dd=dot(dv,dv);if(dd<bd){bd=dd;bv=dv;ba=mix(a.z,b.z,u);bs=mix(a.w,b.w,u);}}" +
-      // a finite stroke spreads like a point source far away (∝ 1/√r) and fades out over the last third of its life
-      "float r=sqrt(bd),u=clamp(ba/" + LS.toFixed(2) + ",0.,1.);if(r<" + RMAX.toFixed(1) + "&&u<1.){float g=bs*LA*inversesqrt(1.+r/90.)*(1.-smoothstep(.6,1.,u));" +
-      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(" + NTR.toFixed(1) + "+u*" + (NTL - 1).toFixed(1) + "+.5)/" + ROWS.toFixed(1) + ")).rgb*g;h+=e.x;s+=e.y*bv/max(r,.001);cv+=e.z;cd+=e.z*exp(-ba/.45);" +
-      // v1.4: inside a fast V, fine divergent wavelets. Each point of the track sheds short capillary crests that run
-      // outward slower than the arms (WV < the arm speed), so with the age growing along the track their crest lines lie
-      // diagonal, fanning out from the track; the wavelength lengthens with age (fine at the tip, coarser downstream)
-      "float ta=max(ba,.03),kw=" + (2 * Math.PI / 7).toFixed(4) + "/(1.+ta/.45),ph=kw*r-" + (2 * Math.PI / 7 * 420).toFixed(2) + "*.45*log(1.+ta/.45)," +
-      "wn=(1.-smoothstep(.62,.95,r/(270.*ta+6.)))*smoothstep(3.,12.,r)*exp(-ta/.6)*smoothstep(.5,.78,bs)*g*WV;" +
-      "if(wn>0.){float cp=cos(ph),sp=sin(ph);h+=wn*cp/(kw*kw);s-=wn*sp/kw*bv/max(r,.001);cv-=wn*cp;cd-=wn*cp*exp(-ba/.45);}}}" +
+      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rgb*q.w;h+=e.x;s+=e.y*d/max(r,.001);cv+=e.z;}" +
+      // the height field (cells of Gp.x CSS px): height, central-difference slope and 5-point Laplacian, gain Gp.y
+      "if(Gp.y!=0.){vec2 c=p/Gp.x;float c0=gh(c),xa=gh(c+vec2(1.,0.)),xb=gh(c-vec2(1.,0.)),ya=gh(c+vec2(0.,1.)),yb=gh(c-vec2(0.,1.));" +
+      "h+=Gp.y*c0;s+=Gp.y*vec2(xa-xb,ya-yb)/(2.*Gp.x);cv+=Gp.y*(xa+xb+ya+yb-4.*c0)/(Gp.x*Gp.x);}" +
       // the finger itself: a dimple held by its meniscus (core dip + a low rim), riding exactly under the pointer
       "if(Dm.z!=0.){vec2 d=p-Dm.xy;float r=length(d),w=Dm.w,c=exp(-r*r/(w*w)),x=(r-1.35*w)/(.16*w),g=exp(-x*x);" +
       "h+=Dm.z*(.1*g-c);s+=Dm.z*(2.*r/(w*w)*c-.1*2.*x/(.16*w)*g)*d/max(r,.001);" +
-      "float sg=.16*w;float dz=.5*Dm.z*(.1*(g*(4.*x*x-2.)/(sg*sg)-2.*x*g/(sg*max(r,1.)))-c*(4.*r*r/(w*w*w*w)-4./(w*w)));cv+=dz;cd+=dz;}" +
+      "float sg=.16*w;float dz=.5*Dm.z*(.1*(g*(4.*x*x-2.)/(sg*sg)-2.*x*g/(sg*max(r,1.)))-c*(4.*r*r/(w*w*w*w)-4./(w*w)));cv+=dz;}" +
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
-      // .x: minus the disturbance's Laplacian (the ambient swell left out): positive along each crest, for the slivers
-      "float ox=-cv;if(Cp.z>.5){vec2 sd=s-s0;float vr=.5+.5*sin(dot(p,vec2(.043,.029))+1.7*sin(dot(p,vec2(-.017,.031))));" +
-      "float c=-cd*inversesqrt(cd*cd+Cp.x*Cp.x*dot(sd,sd)+1e-12),g=max(-cd*Cp.w*m-.03,0.);g=g/(1.+g);" +
-      "ox=pow(g,.7)*(.6+.4*vr)*pow(max(c,0.),Cp.y*(.8+.4*vr));}" +  // dark room: the finished sliver (crest phase vs the disturbance's own slope)
+      // .x, light: minus the disturbance's Laplacian (the swell left out), positive along each crest.
+      // .x, dark (Cp.z): the slope variance this half-res pixel cannot resolve (curvature × pixel, Kaplanyan-style):
+      // the composite widens and dims its glints by it instead of drawing detail it would alias
+      "float ox=-cv;if(Cp.z>.5)ox=Cp.x*cv*cv;" +
       "o=vec4(ox,s,m);}";
+    // v1.5 · the drag wake: a height field (h, v) stepped at a fixed rate on a coarse grid. Each step
+    //   v += c²∇²h − β∇⁴h − κh + μ∇²v − pressure;  v *= damping;  h += v
+    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min ≈ 270 px/s), a pressure moving slower than it
+    // just carries its own depression along (no wake), a faster one sheds a V, and the β term makes short ripples
+    // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
+    // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
+    // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
+    var GRID_P = 0.02, GRID_GAIN = (typeof window !== "undefined" && window.__inkFishGridGain) || 40; // QA hook: window.__inkFishGridGain
+    var GRID = { c2: 0.30, b: 0.01, k: 0.006, mu: 0.015, damp: 0.986, R: 3.0, rate: 120, life: 2.0, fade: 0.45 };
+    var FS_GSTEP = HEAD + "uniform sampler2D Gt;uniform vec4 Sg,Pa;uniform vec2 gz;out vec4 o;" +
+      "vec2 f(ivec2 c){return texelFetch(Gt,clamp(c,ivec2(0),ivec2(gz)-1),0).xy;}" +
+      "void main(){ivec2 c=ivec2(gl_FragCoord.xy);vec2 q=f(c),l=f(c-ivec2(1,0)),r=f(c+ivec2(1,0)),d=f(c-ivec2(0,1)),u=f(c+ivec2(0,1));" +
+      "float s4=l.x+r.x+d.x+u.x,dg=f(c+ivec2(1,1)).x+f(c+ivec2(-1,1)).x+f(c+ivec2(1,-1)).x+f(c+ivec2(-1,-1)).x," +
+      "f4=f(c+ivec2(2,0)).x+f(c-ivec2(2,0)).x+f(c+ivec2(0,2)).x+f(c-ivec2(0,2)).x;" +
+      "float L=s4-4.*q.x,B=20.*q.x-8.*s4+2.*dg+f4,Lv=l.y+r.y+d.y+u.y-4.*q.y;" +
+      "vec2 x=gl_FragCoord.xy,ab=Sg.zw-Sg.xy,ax=x-Sg.xy;float t=clamp(dot(ax,ab)/max(dot(ab,ab),1e-4),0.,1.),dd=length(ax-ab*t);" +
+      "float w=dd<Pa.y?.5+.5*cos(3.14159265*dd/Pa.y):0.;" +
+      "float e=min(min(x.x,x.y),min(gz.x-x.x,gz.y-x.y)),sp=mix(.82,1.,smoothstep(0.,7.,e));" +
+      "float vv=(q.y+" + GRID.c2.toFixed(3) + "*L-" + GRID.b.toFixed(3) + "*B-" + GRID.k.toFixed(4) + "*q.x+" + GRID.mu.toFixed(3) + "*Lv-Pa.x*w)*Pa.z*sp;" +
+      "o=vec4(q.x+vv,vv,0.,1.);}";
+    // a scroll moves the field with the page (bilinear shift by Pa.w cells)
+    var FS_GSHIFT = HEAD + "uniform sampler2D Gt;uniform vec2 gz;uniform float dy;out vec4 o;void main(){o=texture(Gt,(gl_FragCoord.xy+vec2(0.,dy))/gz);}";
     // caustics (after Evan Wallace): a grid refracted onto the floor; each triangle adds old area / new area
     // (the slope is box-filtered over one grid cell first: a wavelength shorter than two cells would alias into dashes)
     var VS_CAU = HEAD + "in vec2 a;uniform sampler2D Wt;uniform vec2 ws,vp;uniform float D,E;out vec2 o0;" +
@@ -218,11 +234,12 @@
       "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.1)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
       // v1.4: each crest as a thin sliver of the brighter sky on its lit face (and a faint shade on the far face),
       // tone-mapped so the fine capillary front reads as well as the coarse crests behind it
-      "if(w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));float sl=pow(max(g,0.),k3.w);" +
-      // k4 (dark room): the crest phase, curvature against slope at a reference wavenumber k4.x, so a crest stays a
-      // sliver at any amplitude (strong back crests do not swell into bands, faint late ones still glint)
-      "if(k4.z>.5)sl=max(w.x,0.);" +
-      "add+=sky*k3.y*sl;mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped  // calm water: skipped
+      "if(k4.z<.5&&w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));float sl=pow(max(g,0.),k3.w);" +
+      "add+=sky*k3.y*sl;mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped
+      // v1.5 dark room: no drawn slivers. The dark sky's one bright patch (a lamp just off the zenith) is reflected
+      // where a facet's slope matches k4.x·(−ld): a slope-space GGX lobe of width k4.y, widened by the slope variance
+      // the pixel cannot resolve (.x) and dimmed in proportion, so fine detail turns into a soft sheen, not moiré
+      "if(k4.z>.5){vec2 ds=s+k4.x*ld;float a2=k4.y*k4.y+w.x,gg=k4.y*k4.y/a2*pow(a2/(a2+dot(ds,ds)),2.);add+=sky*k3.y*gg*m;}" +
       // dark room: the finger's meniscus as sky on a curved wall, one thin bright crescent on the far side of the
       // light and a darker, soft-edged core where the dip looks down into the dark (Dc.z = 0 in the light theme)
       "if(Dc.z!=0.){vec2 d=p-Dc.xy;float r=length(d),dw=Dc.w,x=(r-1.12*dw)/(.11*dw);" +
@@ -244,8 +261,8 @@
         for (var i = 0; i < n; i++) { var nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, ""); u[nm] = gl.getUniformLocation(p, nm); }
         return { p: p, u: u };
       };
-      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP);
-      if (!Pp || !Ps || !Pc || !Pb || !Po) return null;
+      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT);
+      if (!Pp || !Ps || !Pc || !Pb || !Po || !Pg || !Pgs) return null;
       var tex = function (fmt, w, h, filt, type, data, f2) {
         var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
@@ -262,7 +279,11 @@
       var tW = tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fW = fbo(tW);
       var tC = tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fC = fbo(tC);
       var tB = tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), fB = fbo(tB);
-      if (!fP || !fW || !fC || !fB) return null;
+      // the drag-wake height field: two RG16F textures ping-ponged (h, v), cells of gc CSS px
+      var tG = [tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG), tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG)], fG = [fbo(tG[0]), fbo(tG[1])];
+      if (!fP || !fW || !fC || !fB || !fG[0] || !fG[1]) return null;
+      var gc = 4, gx = 1, gy = 1, gi = 0, gLive = false, gLast = -9, gAcc = 0, gT = NaN, gSy = 0, gPr = 0, gPx = 0, gPy = 0, gHas = false;
+      var gClear = function () { for (var i = 0; i < 2; i++) { gl.bindFramebuffer(gl.FRAMEBUFFER, fG[i]); gl.viewport(0, 0, gx, gy); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); } };
       var tFi = tex(0, 0, 0, gl.LINEAR), tSh = tex(0, 0, 0, gl.LINEAR);
       var tri = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, tri); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       var vaoT = gl.createVertexArray(); gl.bindVertexArray(vaoT); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -282,7 +303,7 @@
       var W_ = 0, H_ = 0, sw = 0, shh = 0, lost = false, hadRings = true, Q = 0, RS = [0, 0, 0, 0];
       // the surface and its caustics are re-simulated only when something moved them: every frame while rings
       // live, on scroll or a layout change, else at ~30 Hz for the slow ambient swell (simT, simK)
-      var simT = -9, simK = NaN, work = { comp: 0, sim: 0, cau: 0, prof: 0, up: 0 };
+      var simT = -9, simK = NaN, work = { comp: 0, sim: 0, cau: 0, prof: 0, up: 0, grid: 0 };
       c.addEventListener("webglcontextlost", function (e) { e.preventDefault(); lost = true; api.onlost && api.onlost(); });
       // quality 0: the device pixels of the 2D canvas, a caustic vertex every 6 CSS px; 1 (a slow GPU): 1 px per CSS px, every 8
       var resize = function (cssW, cssH, pw, ph) {
@@ -292,6 +313,10 @@
         grid = Q ? 8 : 6;
         W_ = cssW; H_ = cssH; c.width = pw; c.height = ph; c.style.width = cssW + "px"; c.style.height = cssH + "px";
         sw = Math.max(2, Math.ceil(cssW * SIM)); shh = Math.max(2, Math.ceil(cssH * SIM));
+        // quarter resolution (eighth on the cheaper quality, stepped half as often: the same speeds in px/s)
+        gc = Q ? 8 : 4; gx = Math.max(8, Math.ceil(cssW / gc)); gy = Math.max(8, Math.ceil(cssH / gc));
+        tG.forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, gx, gy, 0, gl.RG, gl.HALF_FLOAT, null); });
+        gClear(); gLive = false; gAcc = 0;
         [tW, tC, tB].forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, shh, 0, gl.RGBA, gl.HALF_FLOAT, null); });
         // the caustic grid reaches 4% past each edge
         var E = 0.04, nx = Math.ceil(cssW * (1 + 2 * E) / grid) + 1, ny = Math.ceil(cssH * (1 + 2 * E) / grid) + 1;
@@ -311,12 +336,47 @@
       var szF = [0, 0], szS = [0, 0];
       var bindT = function (P, name, unit, t) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.uniform1i(P.u[name], unit); };
       /* frame: fish/shadow canvases, rings [{x,y,t,s}], rects [{l,t,r,b,keep,f}] in CSS px of the canvas, time (s), look */
+      // the drag wake: a pressure under the held pointer, ramped on and off over ~0.12 s, stepped at GRID.rate
+      // (half that on the cheaper quality) from the frame's time; the field sleeps GRID.life s after the pressure
+      // lets go (cleared, no readback) and fades out over its last GRID.fade s. Returns the sampling gain (0: asleep)
+      var gridStep = function (trail, T, sy, look) {
+        var dt = gT === gT ? Math.max(0, Math.min(0.1, T - gT)) : 0; gT = T;
+        var dsy = sy - gSy; gSy = sy;
+        var on = !!(trail && trail.d && trail.d[2] > 0), px = on ? trail.d[0] : gPx, py = on ? trail.d[1] : gPy;
+        if (on && gPr === 0) { gPx = px; gPy = py; }        // a fresh press starts here, not at the last one
+        gPr = on ? Math.min(1, gPr + dt / 0.12) : Math.max(0, gPr - dt / 0.12);
+        if (gPr > 0) { gLast = T; if (!gLive) { gClear(); gLive = true; gAcc = 0; } }
+        if (!gLive) return 0;
+        if (T - gLast > GRID.life) { gLive = false; gClear(); return 0; }
+        if (dsy && Math.abs(dsy) < gy * gc) {                 // the field rides with the page
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fG[1 - gi]); gl.viewport(0, 0, gx, gy); gl.useProgram(Pgs.p);
+          bindT(Pgs, "Gt", 0, tG[gi]); gl.uniform2f(Pgs.u.gz, gx, gy); gl.uniform1f(Pgs.u.dy, dsy / gc);
+          gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3); gi = 1 - gi; gPy -= dsy;
+        }
+        var rate = Q ? GRID.rate / 2 : GRID.rate; gAcc += dt * rate;
+        var n = Math.min(4, Math.floor(gAcc)); gAcc = n === 4 ? 0 : gAcc - n;
+        gl.useProgram(Pg.p); gl.bindVertexArray(vaoT);
+        var ax = gPx, ay = gPy;
+        for (var i = 0; i < n; i++) {
+          var u = (i + 1) / n, bx = gPx + (px - gPx) * u, by = gPy + (py - gPy) * u;
+          var len = Math.hypot(bx - ax, by - ay) / gc, R = GRID.R * (Q ? 0.75 : 1);
+          // each point under the capsule feels the pressure for the share of the step the disk covers it
+          var amp = gPr * GRID_P * (2 * R) / (2 * R + len) * (Q ? 2 : 1);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fG[1 - gi]); gl.viewport(0, 0, gx, gy);
+          bindT(Pg, "Gt", 0, tG[gi]); gl.uniform2f(Pg.u.gz, gx, gy);
+          gl.uniform4f(Pg.u.Sg, ax / gc, ay / gc, bx / gc, by / gc); gl.uniform4f(Pg.u.Pa, amp, R, GRID.damp, 0);
+          gl.drawArrays(gl.TRIANGLES, 0, 3); gi = 1 - gi; ax = bx; ay = by;
+        }
+        if (n) { gPx = px; gPy = py; }
+        work.grid = n * gx * gy;
+        return 1 - Math.max(0, Math.min(1, (T - gLast - (GRID.life - GRID.fade)) / GRID.fade));
+      };
       var draw = function (fishC, shC, SHs, rings, rects, T, sy, look, trail) {
         if (lost) return;
         gl.disable(gl.BLEND);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
         upload(tFi, fishC, szF); upload(tSh, shC, szS);
-        work.up = fishC.width * fishC.height + shC.width * shC.height; work.prof = work.sim = work.cau = 0;
+        work.up = fishC.width * fishC.height + shC.width * shC.height; work.prof = work.sim = work.cau = work.grid = 0;
         // 1 · the profile table, once, 48 rows a frame (ring rows with the J0 kernel, trail rows with cos)
         if (pDone < ROWS) {
           if (!pDone) {
@@ -338,13 +398,12 @@
           Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = 300 * R0.t + 8; Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.6); nI++;
         }
         for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 3] = 0;
-        var nS = trail && trail.n > 1 ? Math.min(NS, trail.n) : 0;
-        if (nS) for (var si = 0; si < nS * 4; si++) Su[si] = trail.a[si];
+        var nS = 0, gk = gridStep(trail, T, sy, look);
         // 2 · the surface, 3 · caustics, their penumbra: only when something moved them
         var nR = Math.min(32, rects.n != null ? rects.n : rects.length), key = sy + look.amb * 7 + look.cd * 13 + look.cb * 17 + nR * 19;
         for (var q = 0; q < nR; q++) { var b = rects[q]; key += b.l * 3 + b.t * 5 + b.r * 7 + b.b * 11 + b.keep; Ru[q * 4] = b.l; Ru[q * 4 + 1] = b.t; Ru[q * 4 + 2] = b.r; Ru[q * 4 + 3] = b.b; Ku[q * 4] = b.keep; Ku[q * 4 + 1] = Math.max(1, b.f); }
         var dm = trail && trail.d && trail.d[2] ? trail.d : null;
-        if (nI || nS || dm || hadRings || key !== simK || T - simT >= 1 / 31 || T < simT) {
+        if (nI || gk || dm || hadRings || key !== simK || T - simT >= 1 / 31 || T < simT) {
           simT = T; simK = key;
           for (var a = 0; a < 16; a++) {
             var w = AW[a], ph = (w.w * T + w.ph - w.ky * sy) % 6.283185;
@@ -352,8 +411,8 @@
           }
           gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
           bindT(Ps, "P", 0, tP);
-          gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.Q, Qu); gl.uniform1f(Ps.u.WV, look.wv != null ? look.wv : WAVELET); gl.uniform4fv(Ps.u.A, AMB);
-          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); var cp4 = look.cp || [0, 1, 0, 1], cg4 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Ps.u.Cp, cp4[0], cp4[1], cp4[2] > 0.5 ? 1 : 0, cg4[0]); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.26 * 13 / 0.858 : 0, 13); if (nS) gl.uniform4fv(Ps.u.S, Su);
+          gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
+          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); bindT(Ps, "Gt", 1, tG[gi]); gl.uniform2f(Ps.u.gz, gx, gy); gl.uniform4f(Ps.u.Gp, gc, gk * look.ring * (look.trail || 1) * GRID_GAIN, 0, 0); var cp4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Ps.u.Cp, look.rv || 0, 0, cp4[2] > 0.5 ? 1 : 0, 0); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.26 * 13 / 0.858 : 0, 13);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
           gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -368,7 +427,7 @@
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           work.sim = sw * shh * 2; work.cau = gV;
         }
-        hadRings = nI > 0 || nS > 0;
+        hadRings = nI > 0 || gk > 0;
         // 4 · composite
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, c.width, c.height); gl.useProgram(Po.p);
         bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
@@ -382,6 +441,11 @@
       };
       var api = {
         canvas: c, resize: resize, draw: draw, work: work,
+        // QA only: the half-res surface (slope magnitude percentiles) and whether the wake field is awake
+        peek: function () { var b = new Float32Array(sw * shh * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.readPixels(0, 0, sw, shh, gl.RGBA, gl.FLOAT, b); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          var m = []; for (var i = 0; i < b.length; i += 4) m.push(Math.hypot(b[i + 1], b[i + 2])); m.sort(function (x, y) { return x - y; });
+          var g = new Float32Array(gx * gy * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fG[gi]); gl.readPixels(0, 0, gx, gy, gl.RGBA, gl.FLOAT, g); gl.bindFramebuffer(gl.FRAMEBUFFER, null); var gm = 0; for (i = 0; i < g.length; i += 4) gm = Math.max(gm, Math.abs(g[i]));
+          return { hmax: gm, gpr: gPr, gpx: gPx, gpy: gPy, p50: m[m.length >> 1], p99: m[Math.floor(m.length * 0.99)], p999: m[Math.floor(m.length * 0.999)], max: m[m.length - 1], grid: gLive }; },
         get lost() { return lost; },
         get quality() { return Q; },
         setQuality: function (q) { q = q ? 1 : 0; if (q === Q) return; Q = q; W_ = -1; resize(RS[0], RS[1], RS[2], RS[3]); },
@@ -476,13 +540,13 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.12, 16, 1, 0.7], qdmc: 1, qwv: 0.02 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.05, 0.014, 1, 0], qrv: 0.33, qdmc: 1, qwv: 0.02 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.65, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.3, qhz: 6, qcg: [200, 0.08, 0.08, 1.5], qcp: [0.12, 8, 0, 0.7], qdmc: 0, qwv: 0.045 };
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.65, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.3, qhz: 6, qcg: [200, 0.08, 0.08, 1.5], qcp: [0.12, 8, 0, 0.7], qrv: 0, qdmc: 0, qwv: 0.045 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
@@ -1527,7 +1591,7 @@
       }
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
-      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0; L.wv = pal.qwv;
+      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0; L.wv = pal.qwv; L.rv = pal.qrv || 0;
       var tn = 0, tsy = sy * rpz();
       for (var q = 0; q < trl.length && tn < TRL_N; q++, tn++) {
         var tp = trl[q], ta = trA.a;
@@ -1539,7 +1603,7 @@
       water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L, trA);
       stats.wq = water.quality;
       // GPU work, summed (pixels shaded / uploaded, caustic vertices), for QA: divide by gw.n
-      var gw = stats.gw, wk = water.work; gw.n++; gw.comp += wk.comp; gw.sim += wk.sim; gw.cau += wk.cau; gw.prof += wk.prof; gw.up += wk.up;
+      var gw = stats.gw, wk = water.work; gw.n++; gw.comp += wk.comp; gw.sim += wk.sim; gw.cau += wk.cau; gw.prof += wk.prof; gw.up += wk.up; gw.grid = (gw.grid || 0) + wk.grid;
     };
 
     // ── real water on a slow GPU: measure, try the cheaper quality, and only then fall back ──
@@ -1755,6 +1819,7 @@
         var i = instances.indexOf(api); if (i >= 0) instances.splice(i, 1);
       }
     };
+    Object.defineProperty(api, "_peek", { value: function () { return water && realLive ? water.peek() : null; } }); // QA only
     host.__inkFish = api;
     instances.push(api);
     return api;
