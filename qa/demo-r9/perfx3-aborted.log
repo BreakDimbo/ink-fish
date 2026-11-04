@@ -1,0 +1,1 @@
+{"build": "v1.3.1 real (adaptive)", "size": 1440, "cpu": 1, "mode": "drag", "late": 0.0, "frames": 310, "mean": 16.67, "lib": 0.843, "lt": 0, "water": "fallback", "wq": 0, "gw": {"comp": 1296000, "sim": 648000, "cau": 42804, "prof": 0, "up": 1377000}, "errs": [], "max": 15.9, "p95": 5.8}
