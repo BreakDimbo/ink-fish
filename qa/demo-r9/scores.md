@@ -39,3 +39,16 @@ Judged from side-by-side.mp4, side-by-side-dark.mp4, gap-v14.png, closeup-*-200.
 | motion | 8 | 8 | |
 | restraint | 8.5 | 8 | Dark is busier: more of the packet reads. |
 | **average** | 7.81 | **7.81** | Nothing scores below 7, but the average misses the ≥ 8 gate. |
+
+## Round 13 re-score (2026-11-04 ~18:15 SGT, renders at 2f15a3f, qa/demo-r10)
+| criterion | r12 | r13 | why |
+|---|---|---|---|
+| water-likeness (light) | 8 | 8 | unchanged |
+| crest packets | 8 | 8 | Light unchanged (calm edge 311 px/s, 1.5 s). Dark now shows only the leading crests of each packet. |
+| fast V | 7.5 | 8 | Light: the inside of the wedge now holds visible fine chevron crests (span 13 → 18 levels), fine at the tip and coarser downstream, still restrained. Dark: a faint chevron fill and no more hatching (start-arc rings sink in ~0.6 s and only their leading crests show). Flaws: in light the chevrons still meet the start arcs at the far left; in dark a few beaded dots inside the wedge. |
+| dimple (light) | 7.5 | 7.5 | unchanged |
+| dimple (dark) | 8 | 8 | unchanged, clean crescent |
+| dark reflections | 7.5 | 8 | Busyness −69 % mean / −73 % peak. Thin leading slivers only, with width and brightness varied along the crest; no moiré in the calm centre (it is masked out now). Flaws: the release packet goes very faint by 0.5 s (maybe slightly under-stated against the strider reference), and the finest front crests break into short dashes. |
+| motion | 8 | 8 | |
+| restraint | 8 | 8.5 | dark is calm again |
+| **average** | 7.81 | **8.0** | Gate met (≥ 8, nothing < 7), but only just: the light dimple at 7.5 is the weakest item |
