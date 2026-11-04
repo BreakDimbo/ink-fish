@@ -26,3 +26,16 @@ Judged from side-by-side.mp4, side-by-side-dark.mp4, gap-v14.png, closeup-*-200.
 | motion | 7.5 | 8 | hover wake at 2400 px/s is now stronger than at 1800 (7.00 vs 5.76 mean dL); visible 1.5 s |
 | restraint | 8.5 | 8.5 | |
 | **average** | 7.4 | **7.81** | gate (≥ 8, none < 7): the "none < 7" part passes; the average misses by 0.19 |
+
+## Round 12 re-score (2026-11-04 ~16:55 SGT, renders at 6c6214f)
+| criterion | r11 | r12 | why |
+|---|---|---|---|
+| water-likeness (light) | 8 | 8 | |
+| crest packets | 8 | 8 | |
+| fast V | 7.5 | 7.5 | Inside the wedge there are now fine diagonal wavelets, fine at the tip and coarser downstream. In dark they show, but they cross the stroke-start ring arcs into a hatch rather than clean divergent crests. In light they are barely visible. |
+| dimple (light) | 7.5 | 7.5 | |
+| dimple (dark) | 7.5 | 8 | The full outline is gone: just the sky crescent and the soft dark core. |
+| dark reflections | 7.5 | 7.5 | No more beading on the swell tilt (the sliver phase is now computed in the sim against the disturbance slope only). Crests are a little uniform and wider, and a faint moiré shows in the calm centre. |
+| motion | 8 | 8 | |
+| restraint | 8.5 | 8 | Dark is busier: more of the packet reads. |
+| **average** | 7.81 | **7.81** | Nothing scores below 7, but the average misses the ≥ 8 gate. |
