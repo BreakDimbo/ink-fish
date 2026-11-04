@@ -174,3 +174,13 @@ Verdict: idle is at parity within noise. The pooled idle medians are +1 %/+8 % a
 | 390 4x drag | 9.38 (11.24, 8.74, 9.38) | 8.28 (8.14, 8.28, 9.84) | -12% | 100 | 100 | 0 |
 
 No other perf.py was running during the run (pgrep checked at the start and during polling). The box was under load: load avg about 8–10 from the earlier renders and other agents, so absolute ms are inflated, but the interleaved deltas hold. Idle shows no regression.
+
+## Round 13 perf gate at 2f15a3f (perfx8, 18:06–18:12 SGT, forced real water, interleaved, 3 reps)
+| case | v1.3.1 lib ms (median of 3) | v1.4 r13 lib ms | Δ | p95 v1.3.1 / v1.4 | errs |
+|---|---|---|---|---|---|
+| 1440 1x idle | 6.43 (6.43, 6.05, 7.51) | 6.47 (6.77, 6.47, 5.92) | +1% | 8.9 / 9.1 | 0 |
+| 1440 1x drag | 6.76 (6.64, 6.76, 7.02) | 6.41 (6.20, 7.37, 6.41) | -5% | 8.9 / 9.1 | 0 |
+| 390 4x idle | 8.37 (8.13, 8.47, 8.37) | 8.08 (8.08, 8.02, 8.24) | -3% | 9.8 / 9.7 | 0 |
+| 390 4x drag | 10.48 (10.48, 9.98, 10.65) | 10.42 (9.46, 10.42, 10.63) | -1% | 12.2 / 14.1 | 0 |
+
+Gate rule as r9: Δmedian ≤ max(v1.3.1 spread/2, 5 %). **PASS 4/4**. 1440 1× idle is +1 % (0.04 ms), inside v1.3.1's own 6.05–7.51 spread. No other perf.py/perfx.py was running (pgrep checked before and during the run). Load avg was about 5–6.5 from other agents' sessions.
