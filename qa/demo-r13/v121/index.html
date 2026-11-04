@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ink-fish · 水墨游鱼</title>
+<meta name="description" content="Brush-ink fish swimming in the paper behind your page. One Canvas 2D, zero dependencies, no build step.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f2ede4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11100d" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23a3402f'/%3E%3Cpath d='M5.5 16c3.6-5.4 11-6.6 16-2.9L26.5 9v14l-5-4.1c-5 3.7-12.4 2.5-16-2.9z' fill='%23f2ede4'/%3E%3Ccircle cx='10' cy='15' r='1.1' fill='%23a3402f'/%3E%3C/svg%3E">
+<script>
+  // theme before first paint: ?theme=, then the saved choice, else the system preference
+  (function () {
+    var t = (location.search.match(/[?&]theme=(light|dark)/) || [])[1];
+    try { t = t || localStorage.getItem("ink-fish-demo-theme"); } catch (e) {}
+    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400&display=swap&text=%E3%80%81%E3%80%82%E4%B8%80%E4%B8%8D%E4%B8%A4%E4%B8%AA%E4%B8%BB%E4%BA%8B%E4%BB%B6%E4%BC%9A%E4%BE%9D%E5%81%9C%E5%87%BA%E5%87%BB%E5%88%92%E5%88%9D%E5%8A%A8%E5%8C%96%E5%8E%9F%E5%8F%A3%E5%90%8E%E5%9B%9B%E5%9C%A8%E5%A2%A8%E5%A4%84%E5%A7%8B%E5%AF%B9%E5%B1%80%E5%B1%8F%E5%BB%BA%E5%BD%B1%E5%BF%AB%E6%83%8A%E6%85%A2%E6%8A%95%E6%8E%A5%E6%94%B6%E6%95%A3%E6%95%B4%E6%96%87%E6%97%A0%E6%97%B6%E6%9A%82%E6%9C%AC%E6%9D%A5%E6%9E%84%E6%A0%87%E6%AC%A1%E6%B0%B4%E6%B1%A0%E6%B3%95%E6%B6%9F%E6%B8%B8%E6%BB%9A%E6%BC%AA%E7%82%B9%E7%90%86%E7%94%A8%E7%99%BD%E7%9A%84%E7%A7%BB%E7%A9%BA%E7%BA%AF%E7%BA%B8%E7%BD%91%E7%BE%A4%E8%83%8C%E8%87%AA%E8%8A%82%E8%97%8F%E8%A3%85%E8%A7%86%E8%AF%BB%E8%B0%83%E8%B5%96%E8%B5%B0%E8%BD%AF%E8%BF%91%E9%80%89%E9%83%A8%E9%87%8C%E9%94%A6%E9%99%84%E9%9A%90%E9%9B%B6%E9%9C%80%E9%9D%99%E9%A1%B5%E9%A1%B9%E9%A2%98%E9%A5%B0%E9%B1%BC%E9%B2%A4%E9%BC%A0%EF%BC%8C%EF%BC%9A%EF%BC%9B">
+<link rel="stylesheet" href="src/ink-fish.css">
+<style>
+  :root{
+    --bg:#f2ede4;--ink:#1b1a17;--mute:#5c564c;--faint:#6e675b;--rule:#d3cabb;--rule2:#e3dbcf;--plate:#ece6db;
+    --seal:#a3402f;--str:#7d4a36;
+    --serif:"Cormorant Garamond","EB Garamond","Noto Serif SC","Songti SC","Noto Serif CJK SC","Source Han Serif SC",Garamond,Georgia,serif;
+    --zh:"Noto Serif SC","Songti SC","Noto Serif CJK SC","Source Han Serif SC","STSong",serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --pad:clamp(22px,4vw,56px);
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#11100d;--ink:#ebe5da;--mute:#a39a8c;--faint:#8c8478;--rule:#34302a;--rule2:#24211c;--plate:#171511;--seal:#c4604a;--str:#d2a089}}
+  :root[data-theme=dark]{--bg:#11100d;--ink:#ebe5da;--mute:#a39a8c;--faint:#8c8478;--rule:#34302a;--rule2:#24211c;--plate:#171511;--seal:#c4604a;--str:#d2a089}
+
+  *,*::before,*::after{box-sizing:border-box}
+  html{background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%;text-size-adjust:100%;transition:background-color .7s ease,color .7s ease}
+  body{margin:0;font:400 19px/1.6 var(--serif);font-kerning:normal;font-variant-ligatures:common-ligatures;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;text-autospace:normal}
+  a{color:inherit;text-decoration:none}
+  ::selection{background:color-mix(in srgb,var(--seal) 22%,transparent)}
+  :focus-visible{outline:1px solid var(--ink);outline-offset:4px;border-radius:1px}
+  .zh{font-family:var(--zh);font-weight:400;letter-spacing:.06em}
+  .caps{font:400 10.5px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ── first screen ─────────────────────────────────────────────── */
+  .stage{position:relative;height:100vh;height:100svh;min-height:600px;display:grid;grid-template-rows:auto 1fr auto;padding:0 var(--pad)}
+  .mast{display:flex;align-items:center;justify-content:space-between;padding:26px 0 18px;border-bottom:1px solid var(--rule)}
+  .mark{display:inline-flex;align-items:center;gap:12px}
+  .seal{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:2px;background:var(--seal);color:var(--bg);font:400 11px/1 var(--zh);letter-spacing:0}
+  .mast nav{display:flex;gap:clamp(18px,3vw,40px)}
+  .mast nav a{color:var(--mute);transition:color .25s}
+  .mast nav a:hover{color:var(--ink)}
+  .mast nav a .arr{display:inline-block;margin-left:.35em;font-family:var(--serif);letter-spacing:0;transform:translateY(-.5px)}
+
+  .foot{display:grid;grid-template-columns:1fr minmax(280px,320px);align-items:end;gap:48px;padding:0 0 clamp(28px,5vh,56px)}
+  .title{display:flex;align-items:flex-start;gap:22px;margin:0}
+  .vert{writing-mode:vertical-rl;font:400 15px/1 var(--zh);letter-spacing:.42em;color:var(--ink);padding-top:12px;margin:0;border-left:1px solid var(--rule);padding-left:12px}
+  .title h1{margin:0;font:italic 400 clamp(54px,6.2vw,88px)/.92 var(--serif);letter-spacing:-.012em}
+  .title h1 .dash{font-style:normal;font-weight:400;margin:0 .02em}
+  .kicker{color:var(--mute);margin:0 0 18px}
+  .lede{margin:22px 0 0;max-width:30em}
+  .lede .en{font-size:21px;line-height:1.4;margin:0}
+  .lede .zh{display:block;font-size:14px;line-height:1.8;color:var(--mute);margin-top:6px}
+  .hint{margin:18px 0 0;color:var(--faint);font-style:italic;font-size:16px}
+  .hint .zh{font-style:normal;font-size:12.5px;margin-left:.6em}
+
+  .panel{border-top:1px solid var(--ink);padding-top:2px}
+  .panel .head{display:flex;justify-content:space-between;color:var(--mute);padding:10px 0 12px}
+  .row{display:flex;align-items:center;justify-content:space-between;min-height:44px;border-top:1px solid var(--rule)}
+  .row:last-child{border-bottom:1px solid var(--rule)}
+  .row label,.row .lab{color:var(--mute);cursor:default}
+  .row .lab .zh{font:400 11px/1 var(--zh);letter-spacing:.1em;margin-left:.7em;text-transform:none;color:var(--faint)}
+
+  .seg{display:flex;gap:2px}
+  .seg button{appearance:none;border:0;background:none;color:var(--faint);padding:8px 7px;cursor:pointer;position:relative;transition:color .25s}
+  .seg button:hover{color:var(--ink)}
+  .seg button[aria-pressed=true]{color:var(--ink)}
+  .seg button[aria-pressed=true]::after{content:"";position:absolute;left:7px;right:calc(7px + .16em);bottom:3px;height:1px;background:var(--ink)}
+
+  .range{display:flex;align-items:center;gap:14px}
+  .range output{min-width:3.2em;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+  .track{position:relative;width:118px;height:20px;display:flex;align-items:center}
+  .ticks{position:absolute;left:5px;right:5px;top:50%;height:7px;transform:translateY(-50%);display:flex;justify-content:space-between;pointer-events:none}
+  .ticks i{width:1px;height:7px;background:var(--rule)}
+  input[type=range]{appearance:none;-webkit-appearance:none;width:100%;height:20px;margin:0;background:transparent;cursor:pointer;position:relative}
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--mute)}
+  input[type=range]::-moz-range-track{height:1px;background:var(--mute)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--bg);border:1px solid var(--ink);margin-top:-5px;transition:background .2s}
+  input[type=range]::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--bg);border:1px solid var(--ink)}
+  input[type=range]:hover::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{background:var(--ink)}
+  input[type=range]:hover::-moz-range-thumb{background:var(--ink)}
+  input[type=range]:focus-visible{outline:none}
+  .track:focus-within{outline:1px solid var(--ink);outline-offset:4px}
+
+  .sw{appearance:none;-webkit-appearance:none;margin:0;width:30px;height:16px;border:1px solid var(--mute);border-radius:8px;position:relative;cursor:pointer;background:transparent;transition:border-color .25s,background-color .25s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:8px;height:8px;border-radius:50%;background:var(--mute);transition:transform .3s cubic-bezier(.3,.7,.2,1),background-color .25s}
+  .sw:checked{border-color:var(--ink)}
+  .sw:checked::after{transform:translateX(14px);background:var(--ink)}
+  .sw:focus-visible{outline-offset:3px;border-radius:8px}
+  .sw-wrap{display:flex;align-items:center;gap:12px;color:var(--ink)}
+  .sw-wrap .state{min-width:2.4em;text-align:right;color:var(--mute)}
+
+
+  /* ── below the fold ──────────────────────────────────────────── */
+  main{padding:0 var(--pad)}
+  .sec{display:grid;grid-template-columns:minmax(170px,1fr) minmax(0,3.2fr);gap:0 48px;padding:88px 0 96px;border-top:1px solid var(--rule)}
+  .sec:first-child{border-top-color:var(--ink)}
+  .sec-head{position:sticky;top:32px;align-self:start}
+  .sec-head .num{color:var(--faint);display:block;margin-bottom:16px}
+  .sec-head h2{margin:0;font:400 34px/1.05 var(--serif);letter-spacing:-.005em}
+  .sec-head h2 .zh{display:block;font-size:14px;letter-spacing:.32em;color:var(--mute);margin-top:12px}
+  .body{max-width:800px;min-width:0}
+  .prose{margin:0 0 34px;max-width:36em}
+  .prose p{margin:0 0 12px}
+  .prose .zh{font-size:14.5px;line-height:1.85;color:var(--mute);letter-spacing:.04em}
+  code,.mono{font-family:var(--mono);font-size:.78em;letter-spacing:0}
+  .prose code{font-size:14px;padding:0 .2em;border-bottom:1px solid var(--rule)}
+
+  .code{background:var(--plate);border:1px solid var(--rule);margin:0 0 22px}
+  .code .bar{display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 18px;height:40px;border-bottom:1px solid var(--rule2);color:var(--mute)}
+  .copy{appearance:none;border:0;background:none;color:var(--mute);cursor:pointer;padding:10px 10px;transition:color .25s}
+  .copy:hover{color:var(--ink)}
+  .copy.ok{color:var(--seal)}
+  pre{margin:0;padding:20px 22px 22px;overflow:auto;font:400 13px/1.75 var(--mono);color:var(--ink);tab-size:2;-webkit-overflow-scrolling:touch}
+  pre .c{color:var(--faint);font-style:italic}
+  pre .s{color:var(--str)}
+  pre .t{color:var(--mute)}
+
+  .specimen{margin:0;border:1px solid var(--rule);padding:clamp(12px,2vw,22px);background:var(--bg)}
+  .pond{position:relative;aspect-ratio:16/8;min-height:240px;background:var(--plate);border:1px solid var(--rule2)}
+  .pond .corner{position:absolute;color:var(--faint);z-index:1}
+  .pond .tl{left:16px;top:14px}.pond .br{right:16px;bottom:14px}
+  figcaption{display:flex;justify-content:space-between;gap:24px;align-items:baseline;padding:18px 2px 2px;flex-wrap:wrap}
+  figcaption .cap{font-style:italic;font-size:18px}
+  figcaption .cap .zh{font-style:normal;font-size:13px;color:var(--mute);margin-left:.6em}
+  figcaption code{color:var(--mute);font-size:12.5px}
+
+  .opts{width:100%;border-collapse:collapse;font-size:17px;line-height:1.45}
+  .opts th{text-align:left;font-weight:400;color:var(--mute);padding:0 18px 12px 0;border-bottom:1px solid var(--ink)}
+  .opts td{vertical-align:baseline;padding:14px 18px 14px 0;border-bottom:1px solid var(--rule)}
+  .opts td:first-child code{font-size:13px;color:var(--ink);white-space:nowrap}
+  .opts td:nth-child(2) code{font-size:12px;color:var(--mute);word-break:break-word}
+  .opts td:nth-child(2){width:28%}
+  .opts td:last-child{padding-right:0}
+  .opts .grp td{border-bottom:0;padding:30px 0 8px;color:var(--faint)}
+  .opts code.inl{font-size:12.5px;color:var(--mute);white-space:nowrap}
+  .api{margin:28px 0 0;color:var(--mute);font-size:16.5px}
+  .api code{font-size:12.5px;color:var(--ink)}
+
+  .notes{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:0 48px}
+  .notes li{padding:20px 0 22px;border-top:1px solid var(--rule)}
+  .notes .caps{display:block;color:var(--faint);margin-bottom:10px}
+  .notes h3{margin:0 0 6px;font:500 21px/1.25 var(--serif)}
+  .notes p{margin:0;font-size:17px;line-height:1.55;color:var(--mute)}
+  .measure{margin:40px 0 0;padding:22px 0 0;border-top:1px solid var(--ink);display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .measure div{display:flex;flex-direction:column;gap:8px}
+  .measure b{font:400 40px/1 var(--serif);letter-spacing:-.01em}
+  .measure span{color:var(--mute)}
+  .measure-note{margin:14px 0 0;color:var(--faint);font-style:italic;font-size:15.5px}
+
+  .colophon{display:grid;grid-template-columns:minmax(170px,1fr) minmax(0,3.2fr);gap:0 48px;padding:30px 0 44px;border-top:1px solid var(--ink);color:var(--mute)}
+  .colophon .cols{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .colophon a{border-bottom:1px solid var(--rule);transition:border-color .25s,color .25s}
+  .colophon a:hover{color:var(--ink);border-color:var(--ink)}
+  .colophon p{margin:0;font-size:16px}
+
+  @media (max-width:900px){
+    .foot{grid-template-columns:1fr;gap:34px}
+    .panel{max-width:none}
+    .sec,.colophon{grid-template-columns:minmax(0,1fr);gap:28px}
+    .sec{padding:64px 0 72px}
+    .sec-head{position:static}
+    .notes{grid-template-columns:1fr}
+  }
+  @media (max-width:560px){
+    body{font-size:18px}
+    .mast{padding:20px 0 14px}
+    .mast nav .opt{display:none}
+    .title{gap:16px}
+    .vert{font-size:13px;padding-top:8px;padding-left:10px}
+    .title h1{font-size:52px}
+    .kicker{margin-bottom:14px}
+    .lede{margin-top:16px}
+    .lede .en{font-size:19px}
+    .hint{display:none}
+    .foot{gap:26px;padding-bottom:22px}
+    .row{min-height:42px}
+    .sec-head h2{font-size:30px}
+    pre{font-size:12px;padding:16px}
+    .pond{aspect-ratio:4/5}
+    .opts thead{display:none}
+    .opts,.opts tbody,.opts tr,.opts td{display:block;width:auto}
+    .opts tr{padding:14px 0;border-bottom:1px solid var(--rule)}
+    .opts td{border:0;padding:0}
+    .opts td:nth-child(2){width:auto;margin:4px 0 6px}
+    .opts td:nth-child(2)::before{content:"Default";font:400 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-right:10px}
+    .opts .grp{border:0;padding:24px 0 0}
+    .opts .grp td{padding:0}
+    .measure{grid-template-columns:1fr;gap:18px}
+    .measure b{font-size:34px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html,.sw,.sw::after,.seg button,.copy,a{transition:none!important}
+  }
+</style>
+</head>
+<body>
+<section class="stage" aria-label="ink-fish">
+  <header class="mast">
+    <a class="mark caps" href="./" aria-label="ink-fish home"><span class="seal" aria-hidden="true">墨</span>ink-fish</a>
+    <nav class="caps" aria-label="Links">
+      <a href="#usage">Install</a>
+      <a class="opt" href="#options">Options</a>
+      <a href="https://github.com/BreakDimbo/ink-fish">GitHub<span class="arr" aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+  <div aria-hidden="true"></div>
+  <div class="foot">
+    <div>
+      <p class="kicker caps">A Canvas&nbsp;2D study &nbsp;·&nbsp; MIT</p>
+      <div class="title">
+        <p class="vert" lang="zh-Hans">水墨游鱼</p>
+        <h1>ink<span class="dash">-</span>fish</h1>
+      </div>
+      <div class="lede">
+        <p class="en">Brush-ink fish swimming in the paper behind your page.</p>
+        <span class="zh" lang="zh-Hans">在网页背后的纸里游动的水墨鱼。零依赖，无需构建。</span>
+      </div>
+      <p class="hint">Move slowly and the curious ones come to look; flick, and they scatter.<span class="zh" lang="zh-Hans">慢移鼠标，鱼会游来；快划，四散。</span></p>
+    </div>
+    <div class="panel caps" role="group" aria-label="Demo controls">
+      <div class="head"><span>Controls</span><span lang="zh-Hans" class="zh" style="letter-spacing:.2em">调节</span></div>
+      <div class="row">
+        <span class="lab" id="l-theme">Theme<span class="zh">主题</span></span>
+        <div class="seg" role="group" aria-labelledby="l-theme">
+          <button type="button" class="caps" data-theme-set="auto">Auto</button>
+          <button type="button" class="caps" data-theme-set="light">Light</button>
+          <button type="button" class="caps" data-theme-set="dark">Dark</button>
+        </div>
+      </div>
+      <div class="row">
+        <label class="lab" for="count">Shoal<span class="zh">鱼群</span></label>
+        <div class="range">
+          <div class="track"><div class="ticks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+            <input id="count" type="range" min="0" max="4" step="1" value="0" aria-valuetext="auto"></div>
+          <output for="count" id="count-out">Auto</output>
+        </div>
+      </div>
+      <div class="row">
+        <label class="lab" for="rm">Calm<span class="zh">静水</span></label>
+        <span class="sw-wrap"><span class="state" id="rm-s" aria-hidden="true">Off</span><input class="sw" type="checkbox" id="rm" role="switch"></span>
+      </div>
+      <div class="row">
+        <label class="lab" for="sh">Shadows<span class="zh">投影</span></label>
+        <span class="sw-wrap"><span class="state" id="sh-s" aria-hidden="true">On</span><input class="sw" type="checkbox" id="sh" role="switch" checked></span>
+      </div>
+      <div class="row">
+        <label class="lab" for="rp">Ripples<span class="zh">涟漪</span></label>
+        <span class="sw-wrap"><span class="state" id="rp-s" aria-hidden="true">On</span><input class="sw" type="checkbox" id="rp" role="switch" checked></span>
+      </div>
+      <div class="row">
+        <label class="lab" for="ko">Koi<span class="zh">锦鲤</span></label>
+        <span class="sw-wrap"><span class="state" id="ko-s" aria-hidden="true">On</span><input class="sw" type="checkbox" id="ko" role="switch" checked></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main>
+  <section class="sec" id="usage" aria-labelledby="h-usage">
+    <div class="sec-head"><span class="num caps">01</span><h2 id="h-usage">Usage<span class="zh" lang="zh-Hans">用法</span></h2></div>
+    <div class="body">
+      <div class="prose">
+        <p>Two files, one call. No dependencies and no build step&thinsp;—&thinsp;a plain <code>&lt;script&gt;</code> tag. Purely decorative: the canvas never takes pointer events and is hidden from screen readers.</p>
+        <p class="zh" lang="zh-Hans">两个文件，一次调用。零依赖、无需构建。纯装饰：不接收鼠标事件，对读屏软件隐藏。</p>
+      </div>
+      <div class="code"><div class="bar"><span class="caps">Page background · 整页</span><button class="copy caps" type="button">Copy</button></div>
+<pre><code><span class="t">&lt;link</span> rel=<span class="s">"stylesheet"</span> href=<span class="s">"src/ink-fish.css"</span><span class="t">&gt;</span>
+<span class="t">&lt;script</span> src=<span class="s">"src/ink-fish.js"</span><span class="t">&gt;&lt;/script&gt;</span>
+<span class="t">&lt;script&gt;</span>
+  <span class="c">// a full-page pond behind everything</span>
+  var fish = InkFish.mount(document.body, {
+    fixed: true,                 <span class="c">// the pond stays put; the page scrolls over it</span>
+    ripples: true, koi: true,    <span class="c">// rings under the cursor; a few painted koi</span>
+    obstacles: <span class="s">".card"</span>,          <span class="c">// swum around; no ink under them</span>
+    text: <span class="s">"h1, .intro"</span>,          <span class="c">// ink thins under this text</span>
+    title: <span class="s">"h1"</span>                  <span class="c">// the koi give the headline room</span>
+  });
+
+  fish.set({ theme: <span class="s">"dark"</span> });   <span class="c">// change options at runtime</span>
+  fish.destroy();                <span class="c">// remove the canvas and every listener</span>
+<span class="t">&lt;/script&gt;</span></code></pre></div>
+      <div class="code"><div class="bar"><span class="caps">Element mode · 局部水池</span><button class="copy caps" type="button">Copy</button></div>
+<pre><code><span class="c">// the canvas scrolls with the element and pauses while it is off screen</span>
+InkFish.mount(document.querySelector(<span class="s">"#pond"</span>), { count: 14, koi: 2 });</code></pre></div>
+      <div class="code"><div class="bar"><span class="caps">Auto-init · 自动初始化</span><button class="copy caps" type="button">Copy</button></div>
+<pre><code><span class="t">&lt;body</span> data-ink-fish<span class="t">&gt;</span>
+<span class="t">&lt;div</span> data-ink-fish=<span class="s">'{"count": 20, "theme": "dark"}'</span><span class="t">&gt;&lt;/div&gt;</span></code></pre></div>
+    </div>
+  </section>
+
+  <section class="sec" id="specimen" aria-labelledby="h-spec">
+    <div class="sec-head"><span class="num caps">02</span><h2 id="h-spec">Specimen<span class="zh" lang="zh-Hans">标本</span></h2></div>
+    <div class="body">
+      <figure class="specimen">
+        <div class="pond" id="pond"><span class="corner tl caps" aria-hidden="true">Element mode</span><span class="corner br caps" aria-hidden="true">count · 14 · koi · 2</span></div>
+        <figcaption>
+          <span class="cap">Fig. 1&ensp;A local pond, mounted on a box.<span class="zh" lang="zh-Hans">局部水池</span></span>
+          <code>InkFish.mount(pond, { count: 14, koi: 2 })</code>
+        </figcaption>
+      </figure>
+      <div class="prose" style="margin-top:26px;margin-bottom:0">
+        <p>It pauses while scrolled out of view. Click in open water to startle the fish.</p>
+        <p class="zh" lang="zh-Hans">滚出视口时自动暂停。点击空白处会惊走附近的鱼。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="options" aria-labelledby="h-opt">
+    <div class="sec-head"><span class="num caps">03</span><h2 id="h-opt">Options<span class="zh" lang="zh-Hans">选项</span></h2></div>
+    <div class="body">
+      <table class="opts">
+        <thead><tr><th class="caps" scope="col">Option</th><th class="caps" scope="col">Default</th><th class="caps" scope="col">Description</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="3" class="caps">Shoal &amp; look</td></tr>
+          <tr><td><code>count</code></td><td><code>"auto"</code></td><td>Number of fish. <code class="inl">"auto"</code> scales with the open swimming area; a number is a total (≈62% minnows, 30% carp, 8% koi); or <code class="inl">{ minnow, carp, koi }</code>.</td></tr>
+          <tr><td><code>density</code></td><td><code>1</code></td><td>Area multiplier for <code class="inl">"auto"</code>.</td></tr>
+          <tr><td><code>theme</code></td><td><code>"auto"</code></td><td><code class="inl">"auto"</code>, <code class="inl">"light"</code> or <code class="inl">"dark"</code>. Auto reads <code class="inl">&lt;html data-theme&gt;</code>, else <code class="inl">prefers-color-scheme</code>.</td></tr>
+          <tr><td><code>ink</code></td><td><code>{ light: "#1e1c19", dark: "#e8e2d8" }</code></td><td>Your page's text colour, one hex or per theme. A <code class="inl">--ink-fish-ink</code> CSS variable on the host wins.</td></tr>
+          <tr><td><code>opacity</code></td><td><code>1</code></td><td>Multiplies the ink alpha.</td></tr>
+          <tr><td><code>shadow</code></td><td><code>1</code></td><td>Multiplies the lamp-shadow alpha; <code class="inl">0</code> turns shadows off.</td></tr>
+          <tr><td><code>koi</code></td><td><code>false</code></td><td>Painted koi&thinsp;—&thinsp;kohaku, tancho, yamabuki, showa&thinsp;—&thinsp;in muted pigment washes. <code class="inl">true</code> gives 3–6 by width (2 on mobile), or a number; added on top of <code class="inl">count</code>. Not the same as <code class="inl">count.koi</code>, the large ink fish.</td></tr>
+          <tr class="grp"><td colspan="3" class="caps">Motion &amp; input</td></tr>
+          <tr><td><code>reducedMotion</code></td><td><code>"auto"</code></td><td><code class="inl">"auto"</code> respects <code class="inl">prefers-reduced-motion</code>; <code class="inl">true</code> always calm; <code class="inl">false</code> ignores it.</td></tr>
+          <tr><td><code>interactive</code></td><td><code>true</code></td><td>React to the cursor, taps and fast scrolling.</td></tr>
+          <tr><td><code>ripples</code></td><td><code>false</code></td><td>Faint water rings: one every 120&thinsp;px and 340&thinsp;ms of cursor travel, a slightly stronger one on click; on touch, on tap only. They bend the fish they cross. Off under reduced motion.</td></tr>
+          <tr><td><code>ignore</code></td><td><code>"a,button,input,select, textarea,label, [data-ink-fish-ignore]"</code></td><td>Clicks here don't startle fish; <code class="inl">obstacles</code> and <code class="inl">bands</code> are added automatically.</td></tr>
+          <tr class="grp"><td colspan="3" class="caps">Layout</td></tr>
+          <tr><td><code>obstacles</code></td><td><code>""</code></td><td>Selector: avoided, and the canvas is erased under them.</td></tr>
+          <tr><td><code>bands</code></td><td><code>""</code></td><td>Selector: full-width horizontal walls (e.g. a toolbar), avoided but not erased.</td></tr>
+          <tr><td><code>text</code></td><td><code>""</code></td><td>Selector, or <code class="inl">[{ selector, keep, feather }]</code>: ink thins under this text (<code class="inl">keep</code> 0.24, <code class="inl">feather</code> 30px by default).</td></tr>
+          <tr><td><code>title</code></td><td><code>""</code></td><td>Selector: the big koi give it room.</td></tr>
+          <tr><td><code>hero</code></td><td><code>""</code></td><td>Selector: koi stay above its bottom (+160px desktop, +40px mobile).</td></tr>
+          <tr><td><code>fixed</code></td><td><code>false</code></td><td>Page mode: <code class="inl">true</code> keeps the pond still while the page scrolls over it (no parallax; the swimming area is the viewport).</td></tr>
+          <tr><td><code>habitat</code></td><td><code>""</code></td><td>Selector (page mode): the swimming area ends at this element's bottom; default <code class="inl">&lt;body&gt;</code>.</td></tr>
+          <tr class="grp"><td colspan="3" class="caps">Rendering</td></tr>
+          <tr><td><code>mobileQuery</code></td><td><code>"(max-width: 720px)"</code></td><td>When it matches, mobile counts and sizes are used.</td></tr>
+          <tr><td><code>maxDpr</code></td><td><code>1.5</code></td><td>Device-pixel-ratio cap.</td></tr>
+          <tr><td><code>adaptive</code></td><td><code>true</code></td><td>If frames keep arriving late, drop once to 1 device pixel per CSS pixel.</td></tr>
+          <tr><td><code>fadeIn</code></td><td><code>true</code></td><td>2.4&thinsp;s fade-in on first appearance.</td></tr>
+        </tbody>
+      </table>
+      <p class="api">The instance: <code>{ canvas, stats, fish, running, layout(), set(opts), destroy() }</code>. Call <code>layout()</code> after the page changes structure without a resize.</p>
+    </div>
+  </section>
+
+  <section class="sec" id="technique" aria-labelledby="h-tech">
+    <div class="sec-head"><span class="num caps">04</span><h2 id="h-tech">Technique<span class="zh" lang="zh-Hans">原理</span></h2></div>
+    <div class="body">
+      <ul class="notes">
+        <li><span class="caps">i</span><h3>One canvas, one loop</h3><p>A fixed 1/60&thinsp;s simulation step and rAF drawing, DPR capped at 1.5. Paused when the tab is hidden or no open water is visible; layout is never read inside a frame.</p></li>
+        <li><span class="caps">ii</span><h3>A still pond</h3><p>Far minnows, mid carp, near koi, painted far to near. With <code>fixed</code> the pond stays put and the page slides over it: a scroll only moves the cut-outs, never the canvas, and never triggers layout.</p></li>
+        <li><span class="caps">iii</span><h3>Spine and body wave</h3><p>An 11-segment spine follows the head; joints bend at most ~11°, so a tight turn reads as a curve, never a fold. A wave runs head to tail, its beat tied to speed and thrust.</p></li>
+        <li><span class="caps">iv</span><h3>Burst and glide</h3><p>A short burst, then a long glide; schooling within each species by separation, alignment and cohesion.</p></li>
+        <li><span class="caps">v</span><h3>Ink, not vectors</h3><p>Bézier bodies with ink pooled at the head and washing out toward the tail; paler fins; a dorsal brush stroke and eyes on carp and koi.</p></li>
+        <li><span class="caps">vi</span><h3>Shadows without blur</h3><p>A quarter-resolution canvas of its own, scaled up by the compositor, so interpolation softens them for free. Under reduced motion the fish barely drift, redrawn about ten times a second.</p></li>
+        <li><span class="caps">vii</span><h3>Rings on the surface</h3><p>A short train of three wavefronts per ring: a hairline of cool shade on the inner slope, a little thicker on one side, a hairline of light on the outer. Where a ring crosses a fish, its outline bends a pixel or two, radially.</p></li>
+        <li><span class="caps">viii</span><h3>Pigment, then ink</h3><p>Koi patches live in body space&thinsp;—&thinsp;seeded, lobed, bending with the spine and clipped where they wrap the back&thinsp;—&thinsp;each laid in as a wash with a darker wet edge, a paler heart and a little granulation.</p></li>
+      </ul>
+      <div class="measure">
+        <div><b>~0.8&thinsp;ms</b><span class="caps">per frame, average</span></div>
+        <div><b>58</b><span class="caps">fish at 1440px</span></div>
+        <div><b>31</b><span class="caps">fish at 390px</span></div>
+      </div>
+      <p class="measure-note">Measured on this page with the fixed pond, koi and ripples on (headless Chromium); koi and ripples together add about 0.2&thinsp;ms.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="colophon" style="margin:0 var(--pad)">
+  <span class="caps">Colophon</span>
+  <div class="cols">
+    <p>MIT © 2026 BreakDimbo. Extracted from <a href="https://github.com/BreakDimbo/zh-blog-mirrors">zh-blog-mirrors</a>.</p>
+    <p><a href="https://github.com/BreakDimbo/ink-fish">Source on GitHub</a></p>
+  </div>
+</footer>
+
+<script src="src/ink-fish.js"></script>
+<script>
+  (function () {
+    var D = document, root = D.documentElement;
+    var page = InkFish.mount(D.body, {
+      fixed: true,
+      ripples: true,
+      koi: true,
+      title: ".title h1",
+      obstacles: ".code, .specimen",
+      text: [
+        { selector: ".mast", keep: 0.3, feather: 24 },
+        { selector: ".title h1", keep: 0.16, feather: 44 },
+        { selector: ".kicker, .vert, .lede, .hint", keep: 0.24, feather: 30 },
+        { selector: ".panel", keep: 0.14, feather: 28 },
+        { selector: ".sec-head, .prose, .api, .notes, .measure, .measure-note, .colophon", keep: 0.22, feather: 30 },
+        { selector: ".opts", keep: 0.14, feather: 24 }
+      ]
+    });
+    var pond = InkFish.mount(D.getElementById("pond"), { count: 14, ripples: true, koi: 2 });
+    var both = function (o) { if (page) page.set(o); if (pond) pond.set(o); };
+
+    // theme: auto / light / dark (ink-fish watches <html data-theme> and cross-fades its ink)
+    var segs = D.querySelectorAll("[data-theme-set]");
+    var paint = function () {
+      var cur = root.getAttribute("data-theme") || "auto";
+      segs.forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-theme-set") === cur ? "true" : "false"); });
+    };
+    segs.forEach(function (b) {
+      b.addEventListener("click", function () {
+        var t = b.getAttribute("data-theme-set");
+        if (t === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", t);
+        try { if (t === "auto") localStorage.removeItem("ink-fish-demo-theme"); else localStorage.setItem("ink-fish-demo-theme", t); } catch (e) {}
+        paint();
+      });
+    });
+    paint();
+
+    // shoal size
+    var STEPS = ["auto", 12, 30, 60, 100], range = D.getElementById("count"), out = D.getElementById("count-out");
+    range.addEventListener("input", function () {
+      var v = STEPS[+range.value];
+      out.textContent = v === "auto" ? "Auto" : v;
+      range.setAttribute("aria-valuetext", String(v));
+      if (page) page.set({ count: v });
+    });
+
+    var sw = function (id, fn) {
+      var el = D.getElementById(id), s = D.getElementById(id + "-s");
+      var sync = function () { s.textContent = el.checked ? "On" : "Off"; };
+      el.addEventListener("change", function () { sync(); fn(el.checked); });
+      sync();
+    };
+    sw("rm", function (on) { both({ reducedMotion: on ? true : "auto" }); });
+    sw("sh", function (on) { both({ shadow: on ? 1 : 0 }); });
+    sw("rp", function (on) { both({ ripples: on }); });
+    sw("ko", function (on) { if (page) page.set({ koi: on }); if (pond) pond.set({ koi: on ? 2 : 0 }); });
+
+    // copy buttons
+    D.querySelectorAll(".copy").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var text = b.closest(".code").querySelector("pre").innerText;
+        var done = function () { b.textContent = "Copied"; b.classList.add("ok"); setTimeout(function () { b.textContent = "Copy"; b.classList.remove("ok"); }, 1600); };
+        var fallback = function () {
+          var t = D.createElement("textarea"); t.value = text; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+          D.body.appendChild(t); t.select(); try { D.execCommand("copy"); done(); } catch (e) {} D.body.removeChild(t);
+        };
+        if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+      });
+    });
+  })();
+</script>
+</body>
+</html>

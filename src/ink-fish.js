@@ -1,4 +1,4 @@
-/*! ink-fish v1.5.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.5.1 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -349,7 +349,9 @@
         var dt = gT === gT ? Math.max(0, Math.min(0.1, T - gT)) : 0; gT = T;
         var dsy = sy - gSy; gSy = sy;
         var on = !!(trail && trail.d && trail.d[2] > 0), px = on ? trail.d[0] : gPx, py = on ? trail.d[1] : gPy;
-        if (on && gPr === 0) { gPx = px; gPy = py; }        // a fresh press starts here, not at the last one
+        if (on && gPr === 0) { // a fresh press starts here, not at the last one: where the stroke began, ramped as if pressed since then
+          gPx = trail.d[3]; gPy = trail.d[4]; gPr = Math.max(0, Math.min(1, (trail.d[5] - dt) / 0.12));
+        }
         gPr = on ? Math.min(1, gPr + dt / 0.12) : Math.max(0, gPr - dt / 0.12);
         if (gPr > 0) { gLast = T; if (!gLive) { gClear(); gLive = true; gAcc = 0; } }
         if (!gLive) return 0;
@@ -807,6 +809,17 @@
     var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 2.0, RIP_MAX = 5, fronts = [], wakeN = 0;
     var ripLife = function () { return realLive ? WATER.life * 0.85 : RIP_LIFE; /* ≈1.5 s visible */ };
     var rpz = function () { return page && !O.fixed ? 1 : 0; }; // in parallax mode the rings ride on the page
+    // v1.5.1: a click or tap (no drag) draws v1.2.1's ring again: one slow, decelerating train of three hairlines
+    // (shade inside, light outside) that widens to ~160 px over 3.6 s and bends the fish it crosses. The press and lift
+    // packets, the dimple and the grid wake now belong to the stroke only, from the moment the pointer drags
+    var clk = [], CLK_LIFE = 3.6, CLK_MAX = 5, CLK_SWAP = 0.25;
+    var addClick = function (x, y) {
+      if (!O.ripples || RM.matches) return null;
+      if (clk.length >= CLK_MAX) clk.shift();
+      var c = { x: x, y: y + sy * rpz(), t: 0, q: rnd(0, TAU) }; clk.push(c); wake(); return c;
+    };
+    var clkR = function (c) { var t = c.t * 1.12; return 78 * t / (1 + 0.2 * t); };
+    var clkEnv = function (c) { return M.min(1, c.t / 0.2) * M.pow(M.max(0, 1 - c.t / CLK_LIFE), 1.7); };
     // the surface holds about one firm ring's worth of disturbance (Σ strength × envelope ≤ RIP_SUM); past
     // RIP_MAX rings the oldest is retired over 0.8 s, never cut. A click may exceed the budget; a move may not.
     var RIP_SUM = 1.05;
@@ -825,7 +838,7 @@
     // mouse/pen: starts after 6 px with the button held. touch: after a ~250 ms hold, or when the first move is
     // clearly horizontal; a vertical swipe stays a scroll (we never preventDefault; if the browser takes the
     // gesture it sends pointercancel and the stroke simply ends there)
-    var trl = [], press = null, TRL_LS = WATER.trailLife, TRL_N = 64, trA = { n: 0, a: new Float32Array(TRL_N * 4), d: [0, 0, 0] };
+    var trl = [], press = null, TRL_LS = WATER.trailLife, TRL_N = 64, trA = { n: 0, a: new Float32Array(TRL_N * 4), d: [0, 0, 0, 0, 0, 0] };
     var trOn = function () { return O.ripples && O.trail !== false && !RM.matches; };
     var trCut = function () { if (trl.length && trl[trl.length - 1].s > 0) trl.push({ x: 0, y: 0, t: 0, s: 0 }); };
     var trMove = function (x, y, sp, now) {
@@ -837,6 +850,14 @@
           if (!P.held && M.abs(dy) > M.abs(dx) * 0.8) { press = null; return; } // moved before the hold, and not sideways: a scroll
         } else if (d < 6) return;
         P.act = true; trCut();
+        // a press that turns into a stroke at once is the stroke's: the click ring goes and v1.5's press packet takes its place,
+        // born when the pointer went down (so the stroke looks as it did in v1.5.0). After a still hold it was a click: its ring
+        // stays, and the stroke starts fresh here (dimple ramp, grid pressure)
+        var age = (performance.now() - P.t0) / 1000;
+        if (age < CLK_SWAP) {
+          var ci = clk.indexOf(P.clk); if (ci >= 0) clk.splice(ci, 1);
+          if (addRipple(P.x0, P.y0, 1, true)) { P.ring = rip[rip.length - 1]; P.ring.t = age; }
+        } else { P.t0 = performance.now(); P.x0 = x; P.y0 = y; }
         if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.4; // a press that becomes a stroke: a softer splash, the line carries it
         P.s = 1e-3; trl.push(P.first = { // ~0, not 0: s = 0 marks a separator, and the stroke must still grow from here
            x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
@@ -868,7 +889,7 @@
     };
     var trEnd = function () {
       // lift-off: the meniscus lets go and the dimple springs back, one crisp ring packet
-      if (press && performance.now() - press.t0 > 120) addRipple(press.lx, press.ly, 0.7, true);
+      if (press && press.act && performance.now() - press.t0 > 120) addRipple(press.lx, press.ly, 0.7, true);
       // hover rings resume only after fresh travel and a moment: the hand lifting away doesn't touch the water (no stray ring just after the lift packet)
       if (press) { ripLast.x = press.lx; ripLast.y = press.ly; ripLast.t = performance.now() + 700; }
       if (press && trl.length && trl[trl.length - 1].h) trl[trl.length - 1].h = 0;
@@ -921,8 +942,8 @@
       if (RM.matches || (sel && t && t.closest && t.closest(sel))) return;
       var o = origin(), x = e.clientX - o[0], y = e.clientY - o[1];
       if (!inside(x, y) || !free(x, y + sy, 4)) return;
-      addRipple(x, y, 1, true); // a single, slightly stronger ring (touch: ripples on tap only)
-      if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { ring: rip[rip.length - 1], id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0, held: false, dim: 1 };
+      var c0 = addClick(x, y); // a click or tap: v1.2.1's single ring (a stroke swaps it for its own packet, see trMove)
+      if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { clk: c0, ring: null, id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0, held: false, dim: 1 };
       if (press && press.touch) { var P0 = press; setTimeout(function () { if (press === P0 && !P0.act) P0.held = true; }, 250); } // still for 250 ms = a hold
       ripLast.x = x; ripLast.y = y; ripLast.t = performance.now();
       for (var i = 0; i < fish.length; i++) {
@@ -943,6 +964,7 @@
         var rq = rip[ri]; rq.t += dt; if (rq.die) rq.e -= dt / 0.8;
         if (rq.t > rq.life || rq.e <= 0 || rm) rip.splice(ri, 1);
       }
+      for (var cj = clk.length - 1; cj >= 0; cj--) { clk[cj].t += dt; if (clk[cj].t > CLK_LIFE || rm) clk.splice(cj, 1); }
       if (rm || !trOn()) { trl.length = 0; press = null; }
       for (var ti = 0; ti < trl.length; ti++) trl[ti].t += dt; // a held-still head ages too: no standing bump
       while (trl.length && (trl[0].s <= 0 || trl[0].t > TRL_LS)) trl.shift();
@@ -1014,6 +1036,10 @@
         for (var rj = 0; rj < rip.length; rj++) {
           var rp = rip[rj], rr = ripR(rp), rcx = f.x - rp.x, rcy = (f.y - sy * f.pz) - (rp.y - sy * rpz()), rdd = hyp(rcx, rcy) || 1, del = rdd - rr;
           if (del > -L * 0.5 && del < 16) { var ra0 = ripEnv(rp) * (1 - M.abs(del + L * 0.17) / (L * 0.67 + 16)); fx += rcx / rdd * ra0 * 1.6; fy += rcy / rdd * ra0 * 1.6; }
+        }
+        for (var rk2 = 0; rk2 < clk.length; rk2++) {
+          var cq = clk[rk2], cr = clkR(cq), ccx = f.x - cq.x, ccy = (f.y - sy * f.pz) - (cq.y - sy * rpz()), cdd = hyp(ccx, ccy) || 1, cdel = cdd - cr;
+          if (cdel > -L * 0.5 && cdel < 16) { var ca0 = clkEnv(cq) * (1 - M.abs(cdel + L * 0.17) / (L * 0.67 + 16)); fx += ccx / cdd * ca0 * 1.6; fy += ccy / cdd * ca0 * 1.6; }
         }
         // a fast scroll is felt as a current: a few fish dart, the rest lean with it
         if (!rm && O.interactive && M.abs(svel) > 1400 && M.random() < dt * 0.9 * (1 - f.d * 0.5)) kick(f, 0.8);
@@ -1406,6 +1432,15 @@
           if (ak > 0.004) fronts.push({ x: rp.x, y: ry, r: rk, b: 8 + rk * 0.06, a: ak, w: [1, 0.8, 0.62][wk], q: rp.q });
         }
       }
+      for (var cr0 = 0; cr0 < clk.length; cr0++) { // click rings, as in v1.2.1 (drawn the same way in both water modes)
+        var cp = clk[cr0], c0r = clkR(cp), cen = clkEnv(cp), cy0 = cp.y - sy * rpz();
+        for (var ck = 0; ck < 3; ck++) {
+          var crk = c0r - ck * (14 + c0r * 0.07);
+          if (crk < 2) break;
+          var cak = cen * [1, 0.55, 0.28][ck] / (1 + crk / 110);
+          if (cak > 0.004) fronts.push({ x: cp.x, y: cy0, r: crk, b: 8 + crk * 0.06, a: cak, w: [1, 0.8, 0.62][ck], q: cp.q });
+        }
+      }
       sg.setTransform(1, 0, 0, 1, 0, 0);
       sg.clearRect(0, 0, shc.width, shc.height);
       // shadows: mid and near fish cast a soft shadow on the paper, offset by their height under the lamp;
@@ -1537,7 +1572,7 @@
         }
       }
       // the finger, flat: a small dimple, a shaded core and a light meniscus rim, exactly under the pointer
-      if (!realLive && press && O.ripples && !RM.matches) {
+      if (!realLive && press && press.act && O.ripples && !RM.matches) {
         var dmA = M.min(1, (performance.now() - press.t0) / 60);
         g.lineWidth = 1.6; g.strokeStyle = rgba(rsRGB, dmA * pal.rsa * 0.9);
         g.beginPath(); g.arc(press.lx, press.ly, 5, 0, TAU); g.stroke();
@@ -1607,8 +1642,9 @@
         ta[tn * 4] = tp.x; ta[tn * 4 + 1] = tp.y - tsy; ta[tn * 4 + 2] = tp.t; ta[tn * 4 + 3] = tp.s;
       }
       trA.n = tn;
-      var dA = press && press.dim != null ? M.min(1, (performance.now() - press.t0) / 60) : 0;
+      var dA = press && press.act && press.dim != null ? M.min(1, (performance.now() - press.t0) / 60) : 0;
       trA.d[0] = press ? press.lx : 0; trA.d[1] = press ? press.ly : 0; trA.d[2] = dA;
+      trA.d[3] = press ? press.x0 : 0; trA.d[4] = press ? press.y0 : 0; trA.d[5] = press ? (performance.now() - press.t0) / 1000 : 0;
       water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L, trA);
       stats.wq = water.quality;
       // GPU work, summed (pixels shaded / uploaded, caustic vertices), for QA: divide by gw.n
@@ -1683,7 +1719,7 @@
     var STEP = 1 / 60, raf = 0, last = 0, acc = 0, running = false, shown = false, rmLast = 0;
     var waterOnScreen = function () {
       if (!onScreen) return false;
-      if (!page || fixedOn() || sy < heroB || rip.length || trl.length) return true;
+      if (!page || fixedOn() || sy < heroB || rip.length || clk.length || trl.length) return true;
       // below the hero: only the margins beside the obstacles show water
       var m = 0;
       for (var i = 0; i < obs.length; i++) { var r = obs[i]; if (r.b > sy && r.t < sy + vh) m = M.max(m, M.min(r.l, vw - r.r)); }
@@ -1801,7 +1837,7 @@
         var recon = "koi" in o && o.koi !== O.koi;
         assign(O, o);
         syncPal();
-        if (!O.ripples) rip.length = 0;
+        if (!O.ripples) { rip.length = 0; clk.length = 0; }
         if (!trOn()) { trl.length = 0; press = null; }
         if (booted) {
           if (shown) syncWater();
@@ -1848,5 +1884,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.5.0" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.5.1" };
 });
