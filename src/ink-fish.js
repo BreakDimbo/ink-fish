@@ -83,7 +83,7 @@
     // viscosity, which read as syrup); only the idle ambient swell stays slowed. Scale: 1 cm = 16.7 CSS px.
     var ASLOW = 0.1;                        // slow motion of the ambient swell only
     var NU = 1.2e-6;                        // kinematic viscosity: clean water (1.0e-6) plus a trace of surface film
-    var SRC = 3.5, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
+    var SRC = 4.5, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
     // every ring and trail profile depends only on (distance, age), so both live in one static table, filled once:
     // NTR rows for a point source over ages 0…LR, NTL rows for a line source over 0…LS (≈10 ms per row, so a
     // front moving ~400 px/s shifts ≤ 4 px between rows and stays crisp under linear filtering)
@@ -317,7 +317,7 @@
           gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
           bindT(Ps, "P", 0, tP);
           gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
-          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.8 * 9 / 0.858 : 0, 9); if (nS) gl.uniform4fv(Ps.u.S, Su);
+          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.45 * 9 / 0.858 : 0, 9); if (nS) gl.uniform4fv(Ps.u.S, Su);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
           gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -440,7 +440,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 3.6, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 9 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 3.6, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 14 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
