@@ -209,7 +209,7 @@
       "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.1)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
       // v1.4: each crest as a thin sliver of the brighter sky on its lit face (and a faint shade on the far face),
       // tone-mapped so the fine capillary front reads as well as the coarse crests behind it
-      "float g=w.x*k3.x*m;g=g/(1.+abs(g));add+=sky*k3.y*pow(max(g,0.),k3.w);mul*=1.-k3.z*max(-g,0.);" +
+      "if(w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));add+=sky*k3.y*pow(max(g,0.),k3.w);mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped
       "float d=(fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5)/255.;" +
       "o=vec4(add+d,1.-mul+d);}";
 

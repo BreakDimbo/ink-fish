@@ -10,6 +10,7 @@ BUILDS = {
 }
 PROBE = """(()=>{window.__iv=[];window.__lt=0;let l=0;function f(t){if(l)__iv.push(t-l);l=t;requestAnimationFrame(f)};requestAnimationFrame(f);
 try{new PerformanceObserver(e=>{__lt+=e.getEntries().length}).observe({type:'longtask',buffered:false})}catch(e){}})()"""
+if os.environ.get("ONLY"): BUILDS = {k: v for k, v in BUILDS.items() if os.environ["ONLY"] in k}
 async def run(b, build, w, h, cpu, mode):
     path, rep = BUILDS[build]
     ctx = await b.new_context(viewport={"width": w, "height": h}, device_scale_factor=1, color_scheme="light")
