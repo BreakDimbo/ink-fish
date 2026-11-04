@@ -43,8 +43,7 @@ def path(t):
         if t < 6.6: u = (t - 5.9) / 0.7; return (280 + 860 * u, 550 - 120 * u, True)
         return (1140, 430, False)
     if kind == "click":  # a click (0.12 s) at one spot, then a still press-and-hold (1 s) at another (6 s)
-        if t < 2.4: return (640, 330, 0.5 <= t < 0.62)
-        return (920, 560, 2.6 <= t < 3.6)
+        return (700, 330, 0.5 <= t < 0.62 or 2.6 <= t < 3.6)  # one spot: no hover rings from travel
     if kind == "tap":   # press and hold 1.9 s at one spot (press packet, then the dimple alone), lift (release packet)
         return (700, 290, t < 2.0)
     if kind == "measure":  # a straight horizontal stroke at 1600 px/s, y = 450
@@ -68,6 +67,8 @@ async def main():
             await r.fulfill(response=resp, body=body)
         await pg.route("**/index.html", route)
         await pg.goto(url); await pg.wait_for_timeout(600)
+        if kind == "click":  # park the pointer first; its hover ring dies out during the warm-up
+            q0 = path(0); await pg.mouse.move(q0[0], q0[1])
         for i in range(150): await pg.evaluate("__step(1000/30)")
         await pg.wait_for_timeout(2600)
         down = False
