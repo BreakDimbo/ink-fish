@@ -1,0 +1,3 @@
+slow drag: Σ|dL| behind finger (excl. r<30) 4.589e+07, incl. dimple 4.879e+07
+reference: behind 2.057e+07, incl. 2.302e+07  →  ratio behind 223.1 %, incl. dimple 211.9 %  (whole window, includes the press packet at 0.5 s)
+wake only (t 2.5–4.5 s, steady stroke): v1.4 behind 1.265e+05 vs ref 1.760e+06  →  ratio behind 7.2 %, incl. dimple 50.6 %

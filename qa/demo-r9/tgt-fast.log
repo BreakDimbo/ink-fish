@@ -1,0 +1,8 @@
+fast drag (~1245 px/s): 260 (frame, distance, side) samples; arm angle of max contrast: median 21.5°, IQR 17.5–23.5°
+    60–100 px behind: median 26.5° (n=40)
+   100–140 px behind: median 23.5° (n=40)
+   140–180 px behind: median 22.0° (n=40)
+   180–220 px behind: median 20.5° (n=40)
+   220–260 px behind: median 19.5° (n=40)
+   260–300 px behind: median 17.5° (n=40)
+   300–340 px behind: median 17.0° (n=20)

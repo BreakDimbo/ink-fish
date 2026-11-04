@@ -20,7 +20,7 @@ if mode == "tap":
     N = int(sys.argv[4]) if len(sys.argv) > 4 else 120
     P = [prof(i) for i in range(N)]
     noise = max(0.25, float(np.percentile(np.concatenate([P[i][1][30:] for i in range(N - 6, N)]), 99)))
-    thr = max(0.6, 2 * noise)
+    thr = max(float(__import__("os").environ.get("THRMIN", 0.6)), 2 * noise)  # THRMIN: a perceptual floor (grey levels) when the field is noise-free
     print(f"noise (99th pct |dL| late frames) {noise:.2f}; visibility threshold {thr:.2f} grey levels (azimuthal mean)")
     for name, f0, f1 in (("press", 0, 60), ("release", 60, N)):
         rows = []
@@ -32,7 +32,7 @@ if mode == "tap":
             rows.append((t, inner, outer, rc, float(ab[26:].max()), sg))
         print(f"\n[{name} packet]  t(s)  inner  outer  centroid  peak|dL|")
         for r in rows[:36]: print(f"   {r[0]:5.2f} {r[1]:5d} {r[2]:6d} {r[3]:8.1f} {r[4]:7.2f}")
-        ok = [r for r in rows if 40 < r[1] < 200 and r[2] < RM - 4]
+        ok = [r for r in rows if 40 < r[1] < 215]
         if len(ok) >= 3:
             v_in = np.polyfit([r[0] for r in ok], [r[1] for r in ok], 1)[0]
             print(f"  calm-centre (inner) edge speed ≈ {v_in:.0f} px/s over {len(ok)} frames")
@@ -40,25 +40,36 @@ if mode == "tap":
         if len(ok2) >= 3:
             v_out = np.polyfit([r[0] for r in ok2], [r[2] for r in ok2], 1)[0]
             print(f"  outer front speed ≈ {v_out:.0f} px/s over {len(ok2)} frames")
-        # crests when the packet sits at ~150 px: local maxima of the signed profile above the threshold, within the packet
-        best = min(rows, key=lambda r: abs(r[3] - 150))
+        # crests at t ≈ 0.3 s: local maxima of the signed profile above the threshold, within the packet
+        best = min(rows, key=lambda r: abs(r[0] - 0.3))  # the packet at t ≈ 0.3 s (its front at ~200 px)
         sg = np.convolve(best[5], np.ones(2) / 2, "same")
         pk = [r for r in range(28, RM - 2) if sg[r] > sg[r - 1] and sg[r] >= sg[r + 1] and sg[r] > thr / 2]
         tr = [r for r in range(28, RM - 2) if sg[r] < sg[r - 1] and sg[r] <= sg[r + 1] and sg[r] < -thr / 2]
         print(f"  at t={best[0]:.2f} s (centroid {best[3]:.0f} px): {len(pk)} bright crests, {len(tr)} dark troughs above ±{thr/2:.2f}: crests at r={pk}")
         if len(pk) > 2: dl = np.diff(pk); print(f"  crest spacing: inner {dl[:3].tolist()} … outer {dl[-3:].tolist()} px")
+        for rr in rows:
+            if 0.15 < rr[0] < 0.35:
+                sg2 = np.convolve(rr[5], np.ones(2) / 2, "same")
+                p2 = [r for r in range(28, RM - 2) if sg2[r] > sg2[r - 1] and sg2[r] >= sg2[r + 1] and sg2[r] > thr / 2]
+                print(f"    t={rr[0]:.2f} s: {len(p2)} bright crests (r 28–{RM-2}), centroid {rr[3]:.0f} px, spacing front {np.diff(p2)[-3:].tolist() if len(p2)>3 else []} back {np.diff(p2)[:3].tolist() if len(p2)>3 else []}")
         vis = [r for r in rows if r[4] > thr]
         print(f"  visible (peak azimuthal |dL| > {thr:.2f}) until t={vis[-1][0] if vis else 0:.2f} s after the {name}")
         # also the per-pixel view: fraction of pixels with |dL| > 3 grey levels (what an eye picks out)
         for i in range(f0 + 1, f1):
             d = np.abs(D(run, still, i))[sel]
             if (d > 3).mean() < 0.002 and i > f0 + 6: print(f"  per-pixel: <0.2 % of the disc above 3 grey levels from t={(i - f0)/30:.2f} s"); break
+        # the whole screen (the packet leaves the clear disc by ~0.8 s but stays visible beyond it), outside r < 45 (the
+        # dimple while held): the last frame where ≥ 0.5 % of the clear water (y > 70) is ≥ 3 grey levels off still
+        full = (R >= 45) & (yy > 70); last = None
+        for i in range(f0 + 1, f1):
+            if (np.abs(D(run, still, i))[full] >= 3).mean() >= 0.005: last = (i - f0) / 30
+        print(f"  full-screen: ≥ 0.5 % of the water ≥ 3 grey levels off until t={last} s after the {name}")
 elif mode == "slow":
     # energy behind the finger over the slow 200 px/s stroke (t 0.5–4.5 s, x 300→1100, y 430−50·sin): Σ|dL| excluding r<30 around the finger
-    def energy(run, still, excl=30):
+    def energy(run, still, excl=30, f0=15, f1=150):
         E, Ed = 0.0, 0.0
         yy, xx = np.mgrid[0:900, 0:1440]
-        for i in range(15, 150):
+        for i in range(f0, f1):
             t = i / 30; u = min(max((t - 0.5) / 4, 0), 1); fx, fy = 300 + 800 * u, 430 - 50 * math.sin(u * math.pi)
             d = np.abs(D(run, still, i))[200:700, 150:1250]
             m = np.hypot(xx[200:700, 150:1250] - fx, yy[200:700, 150:1250] - fy) >= excl
@@ -69,7 +80,10 @@ elif mode == "slow":
     print(f"slow drag: Σ|dL| behind finger (excl. r<30) {E:.3e}, incl. dimple {Ed:.3e}")
     if len(sys.argv) > 5:
         Er, Erd = energy(sys.argv[4], sys.argv[5])
-        print(f"reference: behind {Er:.3e}, incl. {Erd:.3e}  →  ratio behind {E / Er * 100:.1f} %, incl. dimple {Ed / Erd * 100:.1f} %")
+        print(f"reference: behind {Er:.3e}, incl. {Erd:.3e}  →  ratio behind {E / Er * 100:.1f} %, incl. dimple {Ed / Erd * 100:.1f} %  (whole window, includes the press packet at 0.5 s)")
+        # the wake alone: t 2.5–4.5 s (frames 75–134), after the press packet has left (visible ≤ 2 s) and before the lift
+        Ew, Ewd = energy(sys.argv[2], sys.argv[3], f0=75, f1=135); Erw, Erwd = energy(sys.argv[4], sys.argv[5], f0=75, f1=135)
+        print(f"wake only (t 2.5–4.5 s, steady stroke): v1.4 behind {Ew:.3e} vs ref {Erw:.3e}  →  ratio behind {Ew / max(Erw, 1) * 100:.1f} %, incl. dimple {Ewd / max(Erwd, 1) * 100:.1f} %")
 elif mode == "fast":
     # wake half-angle: fast path 280,470 → 1140,330 over t 0.5–1.2 s (≈1245 px/s). In each frame while moving,
     # for distances s behind the finger, find the angle of max |dL| on each side of the track

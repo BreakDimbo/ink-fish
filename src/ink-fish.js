@@ -83,13 +83,19 @@
     // viscosity, which read as syrup); only the idle ambient swell stays slowed. Scale: 1 cm = 16.7 CSS px.
     var ASLOW = 0.1;                        // slow motion of the ambient swell only
     var NU = 1.2e-6;                        // kinematic viscosity: clean water (1.0e-6) plus a trace of surface film
-    var SRC = 3.2, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
+    var SRC = 3.2, SRCL = 8, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
     // every ring and trail profile depends only on (distance, age), so both live in one static table, filled once:
     // NTR rows for a point source over ages 0…LR, NTL rows for a line source over 0…LS (≈10 ms per row, so a
     // front moving ~400 px/s shifts ≤ 4 px between rows and stays crisp under linear filtering)
     var NTR = 192, NTL = 192, LR = 2.0, LS = 1.8, NS = 64, ROWS = NTR + NTL, NORMT = 0.12;
-    var DK = 4.2 / SRC / NK, KP = new Float32Array(NK), W = new Float32Array(NK), VD = new Float32Array(NK);
-    for (var i = 0; i < NK; i++) { var kp = (i + 0.5) * DK, km = kp / S; KP[i] = kp; W[i] = Math.sqrt(G * km + SR * km * km * km); VD[i] = 2 * NU * km * km; }
+    var DK = 4.2 / 4.5 / NK, KP = new Float32Array(NK), W = new Float32Array(NK), VD = new Float32Array(NK);
+    // The k grid (to 0.93 px⁻¹, λ ≥ 6.7 px: finer than the half-res sim resolves) is uniform, so a profile is periodic
+    // and mirrored in r with period P = 2π/DK ≈ 1290 px: a packet past P/2 would fold back in as faint fine rings
+    // filling the calm centre. So each component is windowed out once its packet (CG, px/s) is beyond RA ≈ P/2,
+    // where a ring has spread too thin to see anyway.
+    var CG = new Float32Array(NK), RA = 0.48 * 2 * M.PI / DK;
+    for (var i = 0; i < NK; i++) { var kp = (i + 0.5) * DK, km = kp / S; KP[i] = kp; W[i] = Math.sqrt(G * km + SR * km * km * km); VD[i] = 2 * NU * km * km; CG[i] = (G + 3 * SR * km * km) / (2 * W[i]) / S; }
+    var alw = function (k, t) { var e = (CG[k] * t - RA) / 60; return e > 0 ? Math.exp(-e * e) : 1; };
     // Bessel J0, J1: Abramowitz & Stegun 9.4.1–9.4.6 (|error| < 1e-7)
     var j0 = function (x) {
       if (x < 3) { var y = x * x / 9; return 1 + y * (-2.2499997 + y * (1.2656208 + y * (-0.3163866 + y * (0.0444479 + y * (-0.0039444 + y * 0.00021))))); }
@@ -104,19 +110,21 @@
       return f * Math.cos(t) / Math.sqrt(x);
     };
     var JT = null, JL = null, NORM = 1, NORML = 1;
-    // the spectrum of one ring at time t (s): source k·e^(−k²a²/4), phase ω·t, viscous decay
+    // the spectrum of one ring at time t (s): phase ω·t, viscous decay, and a two-scale source k·(½e^(−k²a²/4) +
+    // ½e^(−k²b²/4)): the sharp contact edge (a = SRC) gives the fine fast capillary front, the finger-wide depression
+    // (b = SRCL) the longer waves near the group-velocity minimum that bound the calm centre (≈ cg,min·t) and read
+    // coarser at the back of the packet
     var spec = function (t, A, out, o) {
       var tp = t;
-      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * kp * Math.exp(-kp * kp * SRC * SRC / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
+      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * kp * (0.5 * Math.exp(-kp * kp * SRC * SRC / 4) + 0.5 * Math.exp(-kp * kp * SRCL * SRCL / 4)) * Math.exp(-VD[k] * tp) * Math.cos(W[k] * tp) * alw(k, tp); }
     };
     // a line impulse (the 1-D Cauchy–Poisson problem across the stroke): the same dispersion and decay, with
     // cos(k·d) for J0(k·r) and without the radial measure k. Its source is broader (SRCL, a finger-width line rather
     // than a fingertip) so the energy sits near the group-velocity minimum: the wedge arm then lies at
     // tan α ≈ cg,min/U (≈ 14–15° at 1200 px/s) instead of riding out on the fast capillary fringe
-    var SRCL = 8;
     var specL = function (t, A, out, o) {
       var tp = t;
-      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * Math.exp(-kp * kp * SRCL * SRCL / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
+      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * Math.exp(-kp * kp * SRCL * SRCL / 4 - VD[k] * tp) * Math.cos(W[k] * tp) * alw(k, tp); }
     };
     var tableL = function () {
       if (JL) return JL;
