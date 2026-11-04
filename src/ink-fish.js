@@ -180,12 +180,12 @@
       "o=vec4(ox,s,m);}";
     // v1.5 · the drag wake: a height field (h, v) stepped at a fixed rate on a coarse grid. Each step
     //   v += c²∇²h − β∇⁴h − κh + μ∇²v − pressure;  v *= damping;  h += v
-    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min = √(c² + 2√(κβ)) ≈ 0.5 cell/step ≈ 240 px/s, at λ ≈ 6 cells ≈ 25 px), a pressure moving slower than it
+    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min = √(c² + 2√(κβ)) ≈ 0.5 cell/step ≈ 300 px/s at 5 px cells, at λ ≈ 6 cells ≈ 30 px), a pressure moving slower than it
     // just carries its own depression along (no wake), a faster one sheds a V, and the β term makes short ripples
     // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
     // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
-    var GRID_P = 0.02, GRID_GAIN = (typeof window !== "undefined" && window.__inkFishGridGain) || 120; // QA hook: window.__inkFishGridGain
+    var GRID_P = 0.02, GRID_GAIN = (typeof window !== "undefined" && window.__inkFishGridGain) || 150; // QA hook: window.__inkFishGridGain
     var GRID = { c2: 0.19, b: 0.03, k: 0.03, mu: 0.006, damp: 0.991, R: 2.0, rate: 120, life: 2.0, fade: 0.45 };
     if (typeof window !== "undefined" && window.__inkFishGrid) for (var gk_ in window.__inkFishGrid) GRID[gk_] = window.__inkFishGrid[gk_]; // QA hook
     // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 3.47, must stay under 2(1 + a) with a the
@@ -287,7 +287,10 @@
       var tG = [tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG), tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG)], fG = [fbo(tG[0]), fbo(tG[1])];
       if (!fP || !fW || !fC || !fB || !fG[0] || !fG[1]) return null;
       var gc = 4, gx = 1, gy = 1, gi = 0, gLive = false, gLast = -9, gAcc = 0, gT = NaN, gSy = 0, gPr = 0, gPx = 0, gPy = 0, gHas = false;
-      var gClear = function () { for (var i = 0; i < 2; i++) { gl.bindFramebuffer(gl.FRAMEBUFFER, fG[i]); gl.viewport(0, 0, gx, gy); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); } };
+      // the part of the field that can be non-zero (cells, grown by one cell a step, about the fastest group speed),
+      // so a fresh wake steps only where it is; it only ever grows until the field sleeps
+      var bx0 = 0, by0 = 0, bx1 = 0, by1 = 0, gBox = false;
+      var gClear = function () { for (var i = 0; i < 2; i++) { gl.bindFramebuffer(gl.FRAMEBUFFER, fG[i]); gl.viewport(0, 0, gx, gy); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); } gBox = false; };
       var tFi = tex(0, 0, 0, gl.LINEAR), tSh = tex(0, 0, 0, gl.LINEAR);
       var tri = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, tri); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       var vaoT = gl.createVertexArray(); gl.bindVertexArray(vaoT); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -318,7 +321,7 @@
         W_ = cssW; H_ = cssH; c.width = pw; c.height = ph; c.style.width = cssW + "px"; c.style.height = cssH + "px";
         sw = Math.max(2, Math.ceil(cssW * SIM)); shh = Math.max(2, Math.ceil(cssH * SIM));
         // quarter resolution (eighth on the cheaper quality, stepped half as often: the same speeds in px/s)
-        gc = Q ? 8 : 4; gx = Math.max(8, Math.ceil(cssW / gc)); gy = Math.max(8, Math.ceil(cssH / gc));
+        gc = Q ? 10 : 5; gx = Math.max(8, Math.ceil(cssW / gc)); gy = Math.max(8, Math.ceil(cssH / gc));
         tG.forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, gx, gy, 0, gl.RG, gl.HALF_FLOAT, null); });
         gClear(); gLive = false; gAcc = 0;
         [tW, tC, tB].forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, shh, 0, gl.RGBA, gl.HALF_FLOAT, null); });
@@ -356,23 +359,31 @@
           gl.bindFramebuffer(gl.FRAMEBUFFER, fG[1 - gi]); gl.viewport(0, 0, gx, gy); gl.useProgram(Pgs.p);
           bindT(Pgs, "Gt", 0, tG[gi]); gl.uniform2f(Pgs.u.gz, gx, gy); gl.uniform1f(Pgs.u.dy, dsy / gc);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3); gi = 1 - gi; gPy -= dsy;
+          // the stale copy in the other texture must stay inside the box too: take both, plus a cell for the filter
+          if (gBox) { var dc = dsy / gc; by0 = Math.max(0, Math.floor(Math.min(by0, by0 - dc)) - 1); by1 = Math.min(gy, Math.ceil(Math.max(by1, by1 - dc)) + 1); }
         }
         var rate = Q ? GRID.rate / 2 : GRID.rate; gAcc += dt * rate;
         var n = Math.min(4, Math.floor(gAcc)); gAcc = n === 4 ? 0 : gAcc - n;
-        gl.useProgram(Pg.p); gl.bindVertexArray(vaoT);
-        var ax = gPx, ay = gPy;
+        gl.useProgram(Pg.p); gl.bindVertexArray(vaoT); if (n) gl.enable(gl.SCISSOR_TEST);
+        var ax = gPx, ay = gPy, area = 0;
         for (var i = 0; i < n; i++) {
           var u = (i + 1) / n, bx = gPx + (px - gPx) * u, by = gPy + (py - gPy) * u;
           var len = Math.hypot(bx - ax, by - ay) / gc, R = GRID.R * (Q ? 0.75 : 1);
           // each point under the capsule feels the pressure for the share of the step the disk covers it
           var amp = gPr * GRID_P * (2 * R) / (2 * R + len) * (Q ? 2 : 1);
+          if (gPr > 0) {
+            var sx0 = Math.floor(Math.min(ax, bx) / gc - R - 2), sx1 = Math.ceil(Math.max(ax, bx) / gc + R + 2), sy0 = Math.floor(Math.min(ay, by) / gc - R - 2), sy1 = Math.ceil(Math.max(ay, by) / gc + R + 2);
+            if (gBox) { bx0 = Math.min(bx0, sx0); by0 = Math.min(by0, sy0); bx1 = Math.max(bx1, sx1); by1 = Math.max(by1, sy1); } else { bx0 = sx0; by0 = sy0; bx1 = sx1; by1 = sy1; gBox = true; }
+          }
+          bx0 = Math.max(0, bx0 - 1); by0 = Math.max(0, by0 - 1); bx1 = Math.min(gx, bx1 + 1); by1 = Math.min(gy, by1 + 1);
+          gl.scissor(bx0, by0, Math.max(0, bx1 - bx0), Math.max(0, by1 - by0)); area += Math.max(0, bx1 - bx0) * Math.max(0, by1 - by0);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fG[1 - gi]); gl.viewport(0, 0, gx, gy);
           bindT(Pg, "Gt", 0, tG[gi]); gl.uniform2f(Pg.u.gz, gx, gy);
           gl.uniform4f(Pg.u.Sg, ax / gc, ay / gc, bx / gc, by / gc); gl.uniform4f(Pg.u.Pa, amp, R, GRID.damp, 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3); gi = 1 - gi; ax = bx; ay = by;
         }
-        if (n) { gPx = px; gPy = py; }
-        work.grid = n * gx * gy;
+        if (n) { gPx = px; gPy = py; gl.disable(gl.SCISSOR_TEST); }
+        work.grid = area;
         return 1 - Math.max(0, Math.min(1, (T - gLast - (GRID.life - GRID.fade)) / GRID.fade));
       };
       var draw = function (fishC, shC, SHs, rings, rects, T, sy, look, trail) {
