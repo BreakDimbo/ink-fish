@@ -1,0 +1,24 @@
+{"ver": "v1.3.1", "size": 1440, "cpu": 1, "fallback_ms": 3504, "trace": [[0, "flat/q0"], [501, "real/q0"], [3504, "fallback/q0"]], "errs": []}
+{"ver": "v1.4", "size": 1440, "cpu": 1, "fallback_ms": 7173, "trace": [[0, "flat/q0"], [552, "real/q0"], [4758, "real/q1"], [7173, "fallback/q1"]], "errs": []}
+{"ver": "v1.3.1", "size": 1440, "cpu": 1, "fallback_ms": 3507, "trace": [[0, "flat/q0"], [604, "real/q0"], [3507, "fallback/q0"]], "errs": []}
+{"ver": "v1.4", "size": 1440, "cpu": 1, "fallback_ms": 7147, "trace": [[0, "flat/q0"], [622, "real/q0"], [4660, "real/q1"], [7147, "fallback/q1"]], "errs": []}
+{"ver": "v1.3.1", "size": 1440, "cpu": 1, "fallback_ms": 7228, "trace": [[0, "flat/q0"], [445, "real/q0"], [4753, "real/q1"], [7228, "fallback/q1"]], "errs": []}
+{"ver": "v1.4", "size": 1440, "cpu": 1, "fallback_ms": 3546, "trace": [[0, "flat/q0"], [653, "real/q0"], [3546, "fallback/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 1440, "cpu": 4, "fallback_ms": 4868, "trace": [[0, "flat/q0"], [862, "real/q0"], [4868, "fallback/q0"]], "errs": []}
+{"ver": "v1.4", "size": 1440, "cpu": 4, "fallback_ms": 4553, "trace": [[0, "flat/q0"], [1059, "real/q0"], [4553, "fallback/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 1440, "cpu": 4, "fallback_ms": 4621, "trace": [[0, "flat/q0"], [986, "real/q0"], [4621, "fallback/q0"]], "errs": []}
+{"ver": "v1.4", "size": 1440, "cpu": 4, "fallback_ms": 4803, "trace": [[0, "flat/q0"], [1203, "real/q0"], [4803, "fallback/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 1440, "cpu": 4, "fallback_ms": 4934, "trace": [[0, "flat/q0"], [1083, "real/q0"], [4934, "fallback/q0"]], "errs": []}
+{"ver": "v1.4", "size": 1440, "cpu": 4, "fallback_ms": 4508, "trace": [[0, "flat/q0"], [951, "real/q0"], [4508, "fallback/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 390, "cpu": 1, "fallback_ms": null, "trace": [[0, "flat/q0"], [419, "real/q0"]], "errs": []}
+{"ver": "v1.4", "size": 390, "cpu": 1, "fallback_ms": null, "trace": [[0, "flat/q0"], [466, "real/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 390, "cpu": 1, "fallback_ms": null, "trace": [[0, "flat/q0"], [357, "real/q0"]], "errs": []}
+{"ver": "v1.4", "size": 390, "cpu": 1, "fallback_ms": null, "trace": [[0, "flat/q0"], [450, "real/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 390, "cpu": 1, "fallback_ms": null, "trace": [[0, "flat/q0"], [402, "real/q0"]], "errs": []}
+{"ver": "v1.4", "size": 390, "cpu": 1, "fallback_ms": null, "trace": [[0, "flat/q0"], [488, "real/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 390, "cpu": 4, "fallback_ms": null, "trace": [[0, "flat/q0"], [628, "real/q0"], [3085, "real/q1"], [5175, "real/q0"]], "errs": []}
+{"ver": "v1.4", "size": 390, "cpu": 4, "fallback_ms": null, "trace": [[1, "flat/q0"], [829, "real/q0"], [3213, "real/q1"], [5412, "real/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 390, "cpu": 4, "fallback_ms": null, "trace": [[0, "flat/q0"], [662, "real/q0"], [3130, "real/q1"], [5247, "real/q0"]], "errs": []}
+{"ver": "v1.4", "size": 390, "cpu": 4, "fallback_ms": null, "trace": [[0, "flat/q0"], [757, "real/q0"], [3173, "real/q1"], [5232, "real/q0"]], "errs": []}
+{"ver": "v1.3.1", "size": 390, "cpu": 4, "fallback_ms": null, "trace": [[1, "flat/q0"], [626, "real/q0"], [2977, "real/q1"], [5125, "real/q0"]], "errs": []}
+{"ver": "v1.4", "size": 390, "cpu": 4, "fallback_ms": null, "trace": [[0, "flat/q0"], [841, "real/q0"], [3447, "real/q1"], [5540, "real/q0"]], "errs": []}

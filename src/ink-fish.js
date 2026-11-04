@@ -1539,7 +1539,9 @@
       if (AJ.st === 0) {
         if (!slow) { AJ.slow = 0; return; }
         if (now < AJ.next) return;
-        if (water.quality === 0 && m > 80 && !AJ.tried) { AJ.m0 = m; flatTrial(now); } // a few fps: straight to the flat trial
+        // a few fps: straight to the flat trial. So is ~10–16 fps at 1 device px per CSS px, where quality 1 only thins the
+        // caustic grid and can't reach 21 ms, so its window would only delay the same outcome by ~2 s
+        if (water.quality === 0 && (m > 80 || (m > 60 && dpr <= 1)) && !AJ.tried) { AJ.m0 = m; flatTrial(now); }
         else if (water.quality === 0) { AJ.m0 = m; AJ.st = 1; water.setQuality(1); judgeReset(now, 500); }
         else if (++AJ.slow >= 3) fallBack(); // quality 1 was kept earlier and is slow again, three windows running
       } else if (AJ.st === 1) {
