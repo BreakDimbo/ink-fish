@@ -196,7 +196,7 @@
     // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
     // dither of ±½ step keeps the smooth light from banding in 8 bits.
     // Output is premultiplied "multiply the paper by (1−a), then add rgb", so the page shows through.
-    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,Dc;uniform vec2 ld;in vec2 v;out vec4 o;" +
+    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc;uniform vec2 ld;in vec2 v;out vec4 o;" +
       "float inb(vec2 u){return step(0.,min(min(u.x,u.y),1.-max(u.x,u.y)));}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec4 w=texture(Wt,v);vec2 s=w.yz;float m=w.w;" +
       "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
@@ -209,7 +209,11 @@
       "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.1)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
       // v1.4: each crest as a thin sliver of the brighter sky on its lit face (and a faint shade on the far face),
       // tone-mapped so the fine capillary front reads as well as the coarse crests behind it
-      "if(w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));add+=sky*k3.y*pow(max(g,0.),k3.w);mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped
+      "if(w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));float sl=pow(max(g,0.),k3.w);" +
+      // k4 (dark room): the crest phase, curvature against slope at a reference wavenumber k4.x, so a crest stays a
+      // sliver at any amplitude (strong back crests do not swell into bands, faint late ones still glint)
+      "if(k4.z>0.){float c=w.x/sqrt(w.x*w.x+k4.x*k4.x*dot(s,s)+1e-12);sl=mix(sl,pow(max(g,0.),k4.w)*pow(max(c,0.),k4.y),k4.z);}" +
+      "add+=sky*k3.y*sl;mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped  // calm water: skipped
       // dark room: the finger's meniscus as sky on a curved wall, one thin bright crescent on the far side of the
       // light and a darker, soft-edged core where the dip looks down into the dark (Dc.z = 0 in the light theme)
       "if(Dc.z!=0.){vec2 d=p-Dc.xy;float r=length(d),dw=Dc.w,x=(r-1.12*dw)/(.11*dw);" +
@@ -361,7 +365,7 @@
         bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
         gl.uniform2f(Po.u.vp, W_, H_); gl.uniform2f(Po.u.ss, SHs / shC.width, SHs / shC.height);
         gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
-        gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]);
+        gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]); var k4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Po.u.k4, k4[0], k4[1], k4[2], k4[3]);
         gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
@@ -463,7 +467,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 2.4, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 9, qcg: [320, 0.9, 0, 5], qdmc: 1 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [600, 0.9, 0, 5], qcp: [0.12, 8, 0.75, 0.7], qdmc: 1 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
@@ -1513,7 +1517,7 @@
       }
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
-      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.dmc = pal.qdmc || 0;
+      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0;
       var tn = 0, tsy = sy * rpz();
       for (var q = 0; q < trl.length && tn < TRL_N; q++, tn++) {
         var tp = trl[q], ta = trA.a;
