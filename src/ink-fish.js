@@ -116,7 +116,7 @@
     // coarser at the back of the packet
     var spec = function (t, A, out, o) {
       var tp = t;
-      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * kp * (0.5 * Math.exp(-kp * kp * SRC * SRC / 4) + 0.5 * Math.exp(-kp * kp * SRCL * SRCL / 4)) * Math.exp(-VD[k] * tp) * Math.cos(W[k] * tp) * alw(k, tp); }
+      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * kp * (0.42 * Math.exp(-kp * kp * SRC * SRC / 4) + 0.58 * Math.exp(-kp * kp * SRCL * SRCL / 4)) * Math.exp(-VD[k] * tp) * Math.cos(W[k] * tp) * alw(k, tp); }
     };
     // a line impulse (the 1-D Cauchy–Poisson problem across the stroke): the same dispersion and decay, with
     // cos(k·d) for J0(k·r) and without the radial measure k. Its source is broader (SRCL, a finger-width line rather
@@ -196,7 +196,7 @@
     // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
     // dither of ±½ step keeps the smooth light from banding in 8 bits.
     // Output is premultiplied "multiply the paper by (1−a), then add rgb", so the page shows through.
-    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3;uniform vec2 ld;in vec2 v;out vec4 o;" +
+    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,Dc;uniform vec2 ld;in vec2 v;out vec4 o;" +
       "float inb(vec2 u){return step(0.,min(min(u.x,u.y),1.-max(u.x,u.y)));}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec4 w=texture(Wt,v);vec2 s=w.yz;float m=w.w;" +
       "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
@@ -210,6 +210,11 @@
       // v1.4: each crest as a thin sliver of the brighter sky on its lit face (and a faint shade on the far face),
       // tone-mapped so the fine capillary front reads as well as the coarse crests behind it
       "if(w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));add+=sky*k3.y*pow(max(g,0.),k3.w);mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped
+      // dark room: the finger's meniscus as sky on a curved wall, one thin bright crescent on the far side of the
+      // light and a darker, soft-edged core where the dip looks down into the dark (Dc.z = 0 in the light theme)
+      "if(Dc.z!=0.){vec2 d=p-Dc.xy;float r=length(d),dw=Dc.w,x=(r-1.12*dw)/(.11*dw);" +
+      "float cr=exp(-x*x)*smoothstep(-.35,.85,dot(d/max(r,.001),-ld)),co=exp(-r*r/(1.1*dw*dw));" +
+      "float su=max(.85*co,.8*(1.-smoothstep(1.3*dw,2.2*dw,r)));add=add*(1.-Dc.z*su)+sky*Dc.z*(1.3*cr+.07*exp(-x*x));mul*=1.-.25*Dc.z*co;}" +
       "float d=(fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5)/255.;" +
       "o=vec4(add+d,1.-mul+d);}";
 
@@ -357,7 +362,7 @@
         gl.uniform2f(Po.u.vp, W_, H_); gl.uniform2f(Po.u.ss, SHs / shC.width, SHs / shC.height);
         gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
         gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]);
-        gl.uniform2f(Po.u.ld, -0.6, -0.8);
+        gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
         work.comp = c.width * c.height;
@@ -458,7 +463,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 2.4, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 9, qcg: [320, 0.9, 0, 5] }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 2.4, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 9, qcg: [320, 0.9, 0, 5], qdmc: 1 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
@@ -714,7 +719,7 @@
     var on = function (t, ev, fn, o) { t.addEventListener(ev, fn, o); L_.push([t, ev, fn, o]); };
     // ── water rings: a few at a time, spawned by distance and time, never per mousemove ──
     var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 2.0, RIP_MAX = 5, fronts = [], wakeN = 0;
-    var ripLife = function () { return realLive ? WATER.life : RIP_LIFE; };
+    var ripLife = function () { return realLive ? WATER.life * 0.85 : RIP_LIFE; /* ≈1.5 s visible */ };
     var rpz = function () { return page && !O.fixed ? 1 : 0; }; // in parallax mode the rings ride on the page
     // the surface holds about one firm ring's worth of disturbance (Σ strength × envelope ≤ RIP_SUM); past
     // RIP_MAX rings the oldest is retired over 0.8 s, never cut. A click may exceed the budget; a move may not.
@@ -802,8 +807,8 @@
         // each weaker than the last, which interfere into a single train behind the cursor
         var rd = hyp(cx - ripLast.x, cy - ripLast.y), fw = clamp((ptr.sp - 450) / 900, 0, 1);
         if (now - ripLast.t > 700 || ptr.sp < 300) wakeN = 0;
-        if (rd > 130 + 190 * fw && now - ripLast.t > 380 - 180 * fw) {
-          var sSl = clamp(0.28 + ptr.sp / 3600, 0.28, 0.4), s0 = sSl + (0.46 * M.pow(0.62, wakeN) - sSl) * M.min(1, fw * 3); // a continuous blend
+        if (rd > 130 + 170 * fw && now - ripLast.t > 380 - 240 * fw) {
+          var sSl = clamp(0.28 + ptr.sp / 3600, 0.28, 0.4), s0 = sSl + (0.46 * M.max(M.pow(0.62, wakeN), 0.5) * (1 + 0.25 * clamp((ptr.sp - 1500) / 900, 0, 1)) - sSl) * M.min(1, fw * 3); // a continuous blend
           if (addRipple(cx, cy, s0)) { if (fw > 0) wakeN++; ripLast.x = cx; ripLast.y = cy; ripLast.t = now; }
         }
       }
@@ -1482,7 +1487,7 @@
         }
       }
       var live = !!(want && water && !water.lost);
-      if (live !== realLive) for (var i = 0; i < rip.length; i++) rip[i].life = live ? WATER.life : RIP_LIFE;
+      if (live !== realLive) for (var i = 0; i < rip.length; i++) rip[i].life = ripLife();
       if (live && !realLive) judgeReset(performance.now(), 1000); // shaders compile, textures settle
       realLive = live;
       cv.style.display = shc.style.display = live ? "none" : "";
@@ -1508,7 +1513,7 @@
       }
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
-      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg;
+      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.dmc = pal.qdmc || 0;
       var tn = 0, tsy = sy * rpz();
       for (var q = 0; q < trl.length && tn < TRL_N; q++, tn++) {
         var tp = trl[q], ta = trA.a;

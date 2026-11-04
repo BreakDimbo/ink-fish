@@ -1,7 +1,7 @@
 import os
 import asyncio, json, sys, statistics
 from playwright.async_api import async_playwright
-BASE = "http://127.0.0.1:8733/"
+BASE = os.environ.get("BASE", "http://127.0.0.1:8733/")
 BUILDS = {
   "v1.3.1 real (adaptive)": ("qa/demo-r9/base/index.html", None),
   "v1.3.1 real (forced)": ("qa/demo-r9/base/index.html", ('water: "real",', 'water: "real", adaptive: false,')),

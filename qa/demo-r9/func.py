@@ -25,7 +25,7 @@ def rep(name, ok, detail, errs):
 S = [(300, 400), (600, 340), (900, 420), (1100, 380)]
 async def main():
     async with async_playwright() as p:
-        SW = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
+        SW = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--disable-features=OverscrollHistoryNavigation"]
         b = await p.chromium.launch(executable_path="/usr/bin/google-chrome", args=SW)
         # 1 adaptive fallback (default options on SwiftShader): starts real, falls back, remembered for the session
         ctx, pg, errs = await page(b); await pg.goto(U); await pg.wait_for_timeout(1200)
@@ -78,6 +78,7 @@ async def main():
             await r.fulfill(response=resp, body=body.replace('water: "real",', 'water: "real", adaptive: false,'))
         await pg.route("**/index.html", route)
         await pg.goto(U); await pg.wait_for_timeout(2500)
+        await pg.add_style_tag(content="body{touch-action:pan-y}")  # host sets pan-y, as the README requires (zh-blog-mirrors does)
         ta = await pg.evaluate("getComputedStyle(document.documentElement).touchAction+'/'+getComputedStyle(document.body).touchAction")
         cdp = await ctx.new_cdp_session(pg)
         async def touch(pts, hold=0):
