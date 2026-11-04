@@ -1423,9 +1423,9 @@
       // the finger, flat: a small dimple, a shaded core and a light meniscus rim, exactly under the pointer
       if (!realLive && press && O.ripples && !RM.matches) {
         var dmA = M.min(1, (performance.now() - press.t0) / 60);
-        g.lineWidth = 1.6; g.strokeStyle = rgba(rhRGB, dmA * pal.rha * 0.5);
+        g.lineWidth = 1.6; g.strokeStyle = rgba(rsRGB, dmA * pal.rsa * 0.9);
         g.beginPath(); g.arc(press.lx, press.ly, 5, 0, TAU); g.stroke();
-        g.lineWidth = 1.2; g.strokeStyle = rgba(rsRGB, dmA * pal.rsa * 0.9);
+        g.lineWidth = 1.2; g.strokeStyle = rgba(rhRGB, dmA * pal.rha * 0.8);
         g.beginPath(); g.arc(press.lx, press.ly, 10, 0, TAU); g.stroke();
       }
       // obstacles stay clean
