@@ -122,7 +122,7 @@ press/release rings (8 slots, J0 table), calm-skip and hidden-pause, adaptive ju
   fast V 6.6 s, frames from qa/demo-r10/after-*.mp4).
 - uw-light-ish-lagoon.png, uw-dark-ish-golden-hour.png (Ultra Water stills, perf HUD visible in these two),
   uw-flotsam-impacts.mp4 + uw-flotsam-sheet.png (floaters already afloat: little impact visible; the FPS counter
-  reads the faked clock, not real perf), uw-crate-drop-impact.mp4 if present (a crate dropped from 4 m → impact ring).
+  reads the faked clock, not real perf), uw-crate-drop-impact.mp4 + uw-crate-drop-sheet.png (a crate dropped from 4 m: the splash and impact ring read only faintly over the FFT sea at this size; even in UW the impact ring is a subtle accent, not the main look).
   Scripts: uw.py, uw_drop.py (vite on 127.0.0.1:15199, stopped).
 - Limitations: SwiftShader only, no GPU; Ultra Water is a 3-D ocean so there is no "press/drag" to capture there —
   its interactive analogue is the floater impact ring. Evan's demo has no dark theme; "dark-ish" for UW = golden hour.
