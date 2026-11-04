@@ -54,3 +54,9 @@ not a wedge measurement here: they fit ring arcs.
 Reading it: strength rises continuously from 200 to 1800 px/s (1.8 → 6.1 mean |dL|) but **drops at 2400 px/s**
 (4.5). Over the 950-px stroke only about 3 rings fall, at ≥ 320 px spacing, and each later ring decays by 0.62.
 This is a remaining flaw: the hover train's spacing should shrink, or its decay ease off, above ~1800 px/s.
+
+## Round 11 checks (HEAD 5b8d0b8)
+- Calm-centre (inner) edge speed is 311 px/s (target ≤ 320): pass. See tgt-tap2.log.
+- Visible after release, full-screen (≥ 0.5 % of water ≥ 3 grey levels): 1.5 s (target ≈ 1.5 s): pass. Peak azimuthal visibility lasts 0.80 s.
+- Hover wake, mean |dL| in wedge: 5.76 at 1800 px/s and 7.00 at 2400 px/s. It no longer weakens (previously 6.06 → 4.50). See wake-hover2.log.
+- Fast-V interior fill: not done.
