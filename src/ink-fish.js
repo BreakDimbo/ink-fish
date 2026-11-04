@@ -83,7 +83,7 @@
     // viscosity, which read as syrup); only the idle ambient swell stays slowed. Scale: 1 cm = 16.7 CSS px.
     var ASLOW = 0.1;                        // slow motion of the ambient swell only
     var NU = 1.2e-6;                        // kinematic viscosity: clean water (1.0e-6) plus a trace of surface film
-    var SRC = 5, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
+    var SRC = 3.5, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
     // every ring and trail profile depends only on (distance, age), so both live in one static table, filled once:
     // NTR rows for a point source over ages 0…LR, NTL rows for a line source over 0…LS (≈10 ms per row, so a
     // front moving ~400 px/s shifts ≤ 4 px between rows and stays crisp under linear filtering)
@@ -146,7 +146,7 @@
     var FS_PROF = HEAD + "uniform sampler2D J,F;out vec4 o;void main(){ivec2 c=ivec2(gl_FragCoord.xy);vec2 s=vec2(0.);" +
       "for(int k=0;k<" + NK + ";k++)s+=texelFetch(F,ivec2(k,c.y),0).r*texelFetch(J,ivec2(c.x,k),0).rg;o=vec4(s,0.,1.);}";
     // the surface at half resolution: height, slope (screen axes, y down) and where water shows
-    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "];uniform int nR,nS;uniform float LA;in vec2 v;out vec4 o;" +
+    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "],Dm;uniform int nR,nS;uniform float LA;in vec2 v;out vec4 o;" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;float h=0.;vec2 s=vec2(0.);" +
       "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}" +
       "for(int i=0;i<" + SLOTS + ";i++){vec4 q=I[i];if(q.w==0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + RMAX.toFixed(1) + ")continue;" +
@@ -157,6 +157,9 @@
       // a finite stroke spreads like a point source far away (∝ 1/√r) and fades out over the last third of its life
       "float r=sqrt(bd),u=clamp(ba/" + LS.toFixed(2) + ",0.,1.);if(r<" + RMAX.toFixed(1) + "&&u<1.){float g=bs*LA*inversesqrt(1.+r/90.)*(1.-smoothstep(.6,1.,u));" +
       "vec2 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(" + NTR.toFixed(1) + "+u*" + (NTL - 1).toFixed(1) + "+.5)/" + ROWS.toFixed(1) + ")).rg*g;h+=e.x;s+=e.y*bv/max(r,.001);}}" +
+      // the finger itself: a dimple held by its meniscus (core dip + a low rim), riding exactly under the pointer
+      "if(Dm.z!=0.){vec2 d=p-Dm.xy;float r=length(d),w=Dm.w,c=exp(-r*r/(w*w)),x=(r-1.9*w)/(.55*w),g=exp(-x*x);" +
+      "h+=Dm.z*(.34*g-c);s+=Dm.z*(2.*r/(w*w)*c-.34*2.*x/(.55*w)*g)*d/max(r,.001);}" +
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
       "o=vec4(h,s,m);}";
     // caustics (after Evan Wallace): a grid refracted onto the floor; each triangle adds old area / new area
@@ -304,7 +307,8 @@
         // 2 · the surface, 3 · caustics, their penumbra: only when something moved them
         var nR = Math.min(32, rects.n != null ? rects.n : rects.length), key = sy + look.amb * 7 + look.cd * 13 + look.cb * 17 + nR * 19;
         for (var q = 0; q < nR; q++) { var b = rects[q]; key += b.l * 3 + b.t * 5 + b.r * 7 + b.b * 11 + b.keep; Ru[q * 4] = b.l; Ru[q * 4 + 1] = b.t; Ru[q * 4 + 2] = b.r; Ru[q * 4 + 3] = b.b; Ku[q * 4] = b.keep; Ku[q * 4 + 1] = Math.max(1, b.f); }
-        if (nI || nS || hadRings || key !== simK || T - simT >= 1 / 31 || T < simT) {
+        var dm = trail && trail.d && trail.d[2] ? trail.d : null;
+        if (nI || nS || dm || hadRings || key !== simK || T - simT >= 1 / 31 || T < simT) {
           simT = T; simK = key;
           for (var a = 0; a < 16; a++) {
             var w = AW[a], ph = (w.w * T + w.ph - w.ky * sy) % 6.283185;
@@ -313,7 +317,7 @@
           gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
           bindT(Ps, "P", 0, tP);
           gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
-          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); if (nS) gl.uniform4fv(Ps.u.S, Su);
+          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.8 * 9 / 0.858 : 0, 9); if (nS) gl.uniform4fv(Ps.u.S, Su);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
           gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -436,13 +440,13 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.34, qfr: 2.6, qfi: 0.2, qsi: 0.5, qsg: 4, qring: 0.15, qamb: 1.1, qhz: 9 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 3.6, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 9 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.8, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.6, qhz: 6 };
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.8, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.4, qhz: 6 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
@@ -712,7 +716,7 @@
     // mouse/pen: starts after 6 px with the button held. touch: after a ~250 ms hold, or when the first move is
     // clearly horizontal; a vertical swipe stays a scroll (we never preventDefault; if the browser takes the
     // gesture it sends pointercancel and the stroke simply ends there)
-    var trl = [], press = null, TRL_LS = WATER.trailLife, TRL_N = 64, trA = { n: 0, a: new Float32Array(TRL_N * 4) };
+    var trl = [], press = null, TRL_LS = WATER.trailLife, TRL_N = 64, trA = { n: 0, a: new Float32Array(TRL_N * 4), d: [0, 0, 0] };
     var trOn = function () { return O.ripples && O.trail !== false && !RM.matches; };
     var trCut = function () { if (trl.length && trl[trl.length - 1].s > 0) trl.push({ x: 0, y: 0, t: 0, s: 0 }); };
     var trMove = function (x, y, sp, now) {
@@ -725,13 +729,16 @@
         } else if (d < 6) return;
         P.act = true; trCut();
         if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.55; // a press that becomes a stroke: a softer splash, the line carries it
-        trl.push(P.first = { x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
+        P.s = 0.03; trl.push(P.first = { x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
         trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); // the head follows the pointer until it is committed
         wake(); return;
       }
       if (!inside(x, y) || !free(x, py, 6)) { if (trl.length && trl[trl.length - 1].h) trl[trl.length - 1].h = 0; trCut(); P.gap = 1; return; }
-      var st = clamp(0.36 + sp / 3200, 0.36, 0.62);
-      P.s = P.s * 0.8 + st * 0.2;
+      // v1.4: below water's minimum wave speed (23 cm/s ≈ 380 px/s here) a straight stroke radiates almost nothing;
+      // above it the stroke sheds a wake whose strength grows with speed (the dimple carries the slow case)
+      var gate = M.max(0, M.min(1, (sp - 280) / 320)); gate = gate * gate * (3 - 2 * gate);
+      var st = 0.03 + 0.6 * gate;
+      P.s = P.s * 0.6 + st * 0.4;
       var H = trl[trl.length - 1];
       if (P.gap || !H || !H.h) { P.gap = 0; trl.push({ x: x, y: py, t: 0, s: P.s }); trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); wake(); return; }
       var A = trl[trl.length - 2];
@@ -745,6 +752,8 @@
       wake();
     };
     var trEnd = function () {
+      // lift-off: the meniscus lets go and the dimple springs back, one crisp ring packet
+      if (press && performance.now() - press.t0 > 120) addRipple(press.lx, press.ly, 0.7, true);
       if (press && press.act) { ripLast.x = press.lx; ripLast.y = press.ly; ripLast.t = performance.now(); } // hover rings resume after fresh travel
       if (press && trl.length && trl[trl.length - 1].h) trl[trl.length - 1].h = 0;
       press = null;
@@ -797,7 +806,7 @@
       var o = origin(), x = e.clientX - o[0], y = e.clientY - o[1];
       if (!inside(x, y) || !free(x, y + sy, 4)) return;
       addRipple(x, y, 1, true); // a single, slightly stronger ring (touch: ripples on tap only)
-      if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { ring: rip[rip.length - 1], id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0, held: false };
+      if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { ring: rip[rip.length - 1], id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0, held: false, dim: 1 };
       if (press && press.touch) { var P0 = press; setTimeout(function () { if (press === P0 && !P0.act) P0.held = true; }, 250); } // still for 250 ms = a hold
       ripLast.x = x; ripLast.y = y; ripLast.t = performance.now();
       for (var i = 0; i < fish.length; i++) {
@@ -1411,6 +1420,14 @@
           }
         }
       }
+      // the finger, flat: a small dimple, a shaded core and a light meniscus rim, exactly under the pointer
+      if (!realLive && press && O.ripples && !RM.matches) {
+        var dmA = M.min(1, (performance.now() - press.t0) / 60);
+        g.lineWidth = 1.6; g.strokeStyle = rgba(rhRGB, dmA * pal.rha * 0.5);
+        g.beginPath(); g.arc(press.lx, press.ly, 5, 0, TAU); g.stroke();
+        g.lineWidth = 1.2; g.strokeStyle = rgba(rsRGB, dmA * pal.rsa * 0.9);
+        g.beginPath(); g.arc(press.lx, press.ly, 10, 0, TAU); g.stroke();
+      }
       // obstacles stay clean
       g.globalCompositeOperation = "destination-out";
       g.fillStyle = "#000";
@@ -1474,6 +1491,8 @@
         ta[tn * 4] = tp.x; ta[tn * 4 + 1] = tp.y - tsy; ta[tn * 4 + 2] = tp.t; ta[tn * 4 + 3] = tp.s;
       }
       trA.n = tn;
+      var dA = press && press.dim != null ? M.min(1, (performance.now() - press.t0) / 60) : 0;
+      trA.d[0] = press ? press.lx : 0; trA.d[1] = press ? press.ly : 0; trA.d[2] = dA;
       water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L, trA);
       stats.wq = water.quality;
       // GPU work, summed (pixels shaded / uploaded, caustic vertices), for QA: divide by gw.n
