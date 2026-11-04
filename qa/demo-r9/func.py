@@ -7,7 +7,8 @@ ALL = []
 async def page(b, rep=None, **kw):
     ctx = await b.new_context(viewport={"width": 1440, "height": 900}, **kw); pg = await ctx.new_page(); errs = []
     pg.on("pageerror", lambda e: errs.append("pageerror:" + str(e)))
-    pg.on("console", lambda m: errs.append(m.type + ":" + m.text) if m.type == "error" else None)
+    pg.on("console", lambda m: errs.append(m.type + ":" + m.text) if m.type == "error" and "Failed to load resource" not in m.text else None)
+    pg.on("response", lambda r: errs.append(f"http{r.status}:{r.url}") if r.status >= 400 and not r.url.endswith("/favicon.ico") else None)
     if rep:
         async def route(r):
             resp = await r.fetch(); body = await resp.text()
@@ -88,10 +89,11 @@ async def main():
                 for k in range(1, 9):
                     await cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x0 + (x - x0) * k / 8, "y": y0 + (y - y0) * k / 8}]}); await pg.wait_for_timeout(16)
                 x0, y0 = x, y
-            n = await pg.evaluate(W + ".stats.trail")
+            n = await pg.evaluate("(" + W + "||{stats:{trail:-1}}).stats.trail+0") if True else 0
+            if n < 0: print("  touch: instance missing, url=", pg.url, flush=True)
             await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []}); await pg.wait_for_timeout(200)
             return n, await pg.evaluate("scrollY")
-        v = await touch([(200, 600), (205, 250)]); h = await touch([(40, 200), (360, 215)]); hd = await touch([(60, 220), (200, 180), (340, 230)], hold=400)
+        v = await touch([(200, 600), (205, 250)]); h = await touch([(120, 200), (360, 215)]); hd = await touch([(120, 220), (220, 180), (340, 230)], hold=400)
         rep("touch (pan-y)", v[0] == 0 and v[1] > 0 and h[0] > 0 and hd[0] > 0, f"touch-action={ta}; vertical swipe: trail {v[0]}, scrollY {v[1]}; horizontal: trail {h[0]}, scrollY {h[1]}; hold+drag: trail {hd[0]}", errs)
         await ctx.close(); await b.close()
         # 5 no WebGL at all: 2D fallback
