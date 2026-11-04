@@ -134,3 +134,33 @@ Before the fix (`judgetime.log`), v1.4 at 1440 1× fell back at about 7.15 s in 
 | 390 | 4× | drag | v1.3.1 real (adaptive) | 3 | 10.35 (8.54–11.72) | 39.7 (37.5–41.4) | 99.9 | real | 131,753 | 329,160 |
 | 390 | 4× | drag | v1.4 real (adaptive) | 3 | 9.60 (8.70–10.27) | 34.4 (32.6–36.4) | 95.0 | real | 132,493 | 329,160 |
 
+
+## Round 11 (2026-11-04 16:00–16:20 SGT): idle regression re-check
+
+The earlier "1440 1× idle forced +45%" came from a single run (perfx4) and did not reproduce. A clean A/B probe (`profprobe.py`, 7 s idle, 1440 1× forced) gave 6.3 ms/frame for v1.3.1 and 6.2 ms/frame for v1.4. The profile-table build finishes in the first ~0.8 s after load, before any measurement window. The `prof` column in `gw` is an average since load, not work done inside the window.
+
+Changes for calm water anyway:
+- The crest-sliver term (k3/k4) is now skipped when the disturbance Laplacian is exactly 0, which it is on calm water because the ambient swell is excluded. The dark meniscus term is skipped unless pressed (Dc.z = 0).
+- The sim keeps v1.3.1's cadence: about 31 Hz for the ambient swell, otherwise only when something moved. This is the same as `173a9c0`.
+- Rings now live 0.85·LR, which means fewer live slots.
+
+6 cases × 3 interleaved runs, forced (`adaptive:false`), lib ms per frame. Set 1 is at 712911e, measured from a frozen worktree. Another agent's renders, plus my own previews, ran on the box at the same time, so the noise is high.
+
+| case | v1.3.1 median (runs) | v1.4 median (runs) | Δ median | mean frame ms v1.3.1 / v1.4 |
+|---|---|---|---|---|
+| 1440 1x idle forced | 6.32 (6.32, 6.22, 9.89) | 6.80 (6.33, 6.80, 8.35) | +8% | 77 / 80 |
+| 1440 1x drag forced | 7.76 (7.29, 7.76, 8.34) | 7.17 (7.81, 7.17, 5.88) | -8% | 106 / 87 |
+| 1440 4x idle forced | 24.56 (24.41, 38.01, 24.56) | 28.11 (28.11, 32.18, 25.49) | +14% | 130 / 212 |
+| 1440 4x drag forced | 31.05 (28.35, 31.05, 31.37) | 29.17 (29.17, 36.52, 28.87) | -6% | 144 / 144 |
+| 390 4x idle forced | 9.69 (7.96, 9.69, 11.82) | 10.11 (7.57, 10.11, 15.62) | +4% | 44 / 70 |
+| 390 4x drag forced | 10.51 (10.51, 9.23, 10.99) | 9.44 (9.44, 7.67, 10.47) | -10% | 50 / 41 |
+
+Set 2: idle only, at HEAD 5925cb8. Another agent's perf.py was also running.
+
+| case | v1.3.1 | v1.4 | Δ | |
+|---|---|---|---|---|
+| 1440 1x idle forced (HEAD 5925cb8, 2nd set) | 7.21 (7.21, 7.61, 6.44) | 7.27 (7.89, 7.06, 7.27) | +1% | |
+| 1440 4x idle forced (HEAD 5925cb8, 2nd set) | 28.41 (33.43, 28.41, 24.77) | 24.84 (27.50, 24.84, 23.49) | -13% | |
+| 390 4x idle forced (HEAD 5925cb8, 2nd set) | 7.50 (6.70, 7.50, 8.15) | 8.05 (7.68, 8.05, 8.06) | +7% | |
+
+Verdict: idle is at parity within noise. The pooled idle medians are +1 %/+8 % at 1440 1×, −13 %/+14 % at 1440 4×, and +7 %/+4 % at 390 4×. Every Δ is smaller than v1.3.1's own run-to-run spread for that cell: 3.7, 13.6 and 3.9 ms. Drag is faster in v1.4 in all three cells (−6 to −10 %). Logs: perfx5a.log, perfx5b.log, perfx6.log.
