@@ -180,13 +180,16 @@
       "o=vec4(ox,s,m);}";
     // v1.5 · the drag wake: a height field (h, v) stepped at a fixed rate on a coarse grid. Each step
     //   v += c²∇²h − β∇⁴h − κh + μ∇²v − pressure;  v *= damping;  h += v
-    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min ≈ 270 px/s), a pressure moving slower than it
+    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min = √(c² + 2√(κβ)) ≈ 0.5 cell/step ≈ 240 px/s, at λ ≈ 6 cells ≈ 25 px), a pressure moving slower than it
     // just carries its own depression along (no wake), a faster one sheds a V, and the β term makes short ripples
     // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
     // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
-    var GRID_P = 0.02, GRID_GAIN = (typeof window !== "undefined" && window.__inkFishGridGain) || 40; // QA hook: window.__inkFishGridGain
-    var GRID = { c2: 0.30, b: 0.01, k: 0.006, mu: 0.015, damp: 0.986, R: 3.0, rate: 120, life: 2.0, fade: 0.45 };
+    var GRID_P = 0.02, GRID_GAIN = (typeof window !== "undefined" && window.__inkFishGridGain) || 120; // QA hook: window.__inkFishGridGain
+    var GRID = { c2: 0.19, b: 0.03, k: 0.03, mu: 0.006, damp: 0.991, R: 2.0, rate: 120, life: 2.0, fade: 0.45 };
+    if (typeof window !== "undefined" && window.__inkFishGrid) for (var gk_ in window.__inkFishGrid) GRID[gk_] = window.__inkFishGrid[gk_]; // QA hook
+    // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 3.47, must stay under 2(1 + a) with a the
+    // per-step velocity retention (damping × viscosity × sponge, ≥ 0.77 at the border): 3.55
     var FS_GSTEP = HEAD + "uniform sampler2D Gt;uniform vec4 Sg,Pa;uniform vec2 gz;out vec4 o;" +
       "vec2 f(ivec2 c){return texelFetch(Gt,clamp(c,ivec2(0),ivec2(gz)-1),0).xy;}" +
       "void main(){ivec2 c=ivec2(gl_FragCoord.xy);vec2 q=f(c),l=f(c-ivec2(1,0)),r=f(c+ivec2(1,0)),d=f(c-ivec2(0,1)),u=f(c+ivec2(0,1));" +
@@ -443,9 +446,10 @@
       var api = {
         canvas: c, resize: resize, draw: draw, work: work,
         // QA only: the half-res surface (slope magnitude percentiles) and whether the wake field is awake
-        peek: function () { var b = new Float32Array(sw * shh * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.readPixels(0, 0, sw, shh, gl.RGBA, gl.FLOAT, b); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        peek: function (full) { var b = new Float32Array(sw * shh * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.readPixels(0, 0, sw, shh, gl.RGBA, gl.FLOAT, b); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
           var m = []; for (var i = 0; i < b.length; i += 4) m.push(Math.hypot(b[i + 1], b[i + 2])); m.sort(function (x, y) { return x - y; });
           var g = new Float32Array(gx * gy * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fG[gi]); gl.readPixels(0, 0, gx, gy, gl.RGBA, gl.FLOAT, g); gl.bindFramebuffer(gl.FRAMEBUFFER, null); var gm = 0; for (i = 0; i < g.length; i += 4) gm = Math.max(gm, Math.abs(g[i]));
+          if (full) { var hh = new Array(gx * gy); for (i = 0; i < gx * gy; i++) hh[i] = Math.round(g[i * 4] * 1e4) / 1e4; return { gx: gx, gy: gy, h: hh }; }
           return { hmax: gm, gpr: gPr, gpx: gPx, gpy: gPy, p50: m[m.length >> 1], p99: m[Math.floor(m.length * 0.99)], p999: m[Math.floor(m.length * 0.999)], max: m[m.length - 1], grid: gLive }; },
         get lost() { return lost; },
         get quality() { return Q; },
@@ -1820,7 +1824,7 @@
         var i = instances.indexOf(api); if (i >= 0) instances.splice(i, 1);
       }
     };
-    Object.defineProperty(api, "_peek", { value: function () { return water && realLive ? water.peek() : null; } }); // QA only
+    Object.defineProperty(api, "_peek", { value: function (full) { return water && realLive ? water.peek(full) : null; } }); // QA only
     host.__inkFish = api;
     instances.push(api);
     return api;
