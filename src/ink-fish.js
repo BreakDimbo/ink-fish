@@ -243,7 +243,7 @@
       // the pixel cannot resolve (k4.w·.x²) and dimmed in proportion, so fine detail turns into a soft sheen, not
       // moiré; only disturbed water (a crest, .x > 0) catches it, plus a faint sky sheen along each crest. Calm
       // water and the idle swell stay dark
-      "if(k4.z>.5&&w.x!=0.){float g=max(w.x*k3.x*m,0.);g=g/(1.+g);vec2 ds=s+k4.x*ld;float va=k4.w*w.x*w.x,a2=k4.y*k4.y+va,gg=k4.y*k4.y/a2*pow(a2/(a2+dot(ds,ds)),2.);add+=sky*k3.y*m*(.3*pow(g,k3.w)+gg*sqrt(g));}" +
+      "if(k4.z>.5&&w.x!=0.){float g=max(w.x*k3.x*m,0.);g=g/(1.+g);vec2 ds=s+k4.x*ld;float va=k4.w*w.x*w.x,a2=k4.y*k4.y+va,gg=k4.y*k4.y/a2*pow(a2/(a2+dot(ds,ds)),2.);add+=sky*k3.y*m*(k3.z*pow(g,k3.w)+gg*sqrt(g));}" +
       // dark room: the finger's meniscus as sky on a curved wall, one thin bright crescent on the far side of the
       // light and a darker, soft-edged core where the dip looks down into the dark (Dc.z = 0 in the light theme)
       "if(Dc.z!=0.){vec2 d=p-Dc.xy;float r=length(d),dw=Dc.w,x=(r-1.12*dw)/(.11*dw);" +
@@ -545,7 +545,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.10, 0.025, 1, 4], qgg: 2.5, qdmc: 1, qwv: 0.02 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0.24, 2.3], qcp: [0.10, 0.025, 1, 4], qgg: 2.5, qdmc: 1, qwv: 0.02 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
