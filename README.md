@@ -263,3 +263,7 @@ The real-water methods come from [Ultra Water](https://github.com/Humpalumps/Ult
 ### License
 
 [MIT](LICENSE) © 2026 BreakDimbo
+
+### v1.3.2 — water, not syrup
+Press-and-drag trails and rings now run in real time with water's viscosity (1 cm ≈ 16.7 CSS px): thin fronts detach from the stroke at ~300 px/s (≈ 17.7 cm/s, water's minimum group speed), thin out as ~1/√r and are gone in ~1.8 s. The idle swell stays slow. The 2D fallback draws the same thin, brisk outward lines. `water: 'real'` API unchanged.
+按住拖动的水纹改为真实时间、真实水的粘度：细而清晰的波前以约 300 px/s 离开笔迹并向外扩散衰减，不再像粘稠液体。

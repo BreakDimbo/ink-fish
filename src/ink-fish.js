@@ -1,4 +1,4 @@
-/*! ink-fish v1.3.1 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.3.2 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -79,11 +79,15 @@
   //    a Beer–Lambert water column, and the surface adds a Fresnel-weighted reflection of a soft sky.
   var WATER = (function () {
     var S = 6e-4, G = 9.81, SR = 7.4e-5;   // metres per CSS px; g; σ/ρ
-    var SLOW = 0.22, ASLOW = 0.1;           // slow motion of the rings, of the ambient swell
-    var NU = 6e-6;                          // kinematic viscosity, ×6 for a pond's surface film
-    var SRC = 7, NK = 192, NR = 512, RMAX = 640, SLOTS = 8, SIM = 0.5;
-    // a press-and-drag trail is a line source: NA profile rows over its life LS (ages bunched young), up to NS points
-    var NA = 12, LS = 3.4, NS = 64, ROWS = SLOTS + NA;
+    // v1.3.2: rings and trails run in real time with water's own viscosity (v1.3.2 ran them at 0.22× with 6× the
+    // viscosity, which read as syrup); only the idle ambient swell stays slowed. Scale: 1 cm = 16.7 CSS px.
+    var ASLOW = 0.1;                        // slow motion of the ambient swell only
+    var NU = 1.2e-6;                        // kinematic viscosity: clean water (1.0e-6) plus a trace of surface film
+    var SRC = 5, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
+    // every ring and trail profile depends only on (distance, age), so both live in one static table, filled once:
+    // NTR rows for a point source over ages 0…LR, NTL rows for a line source over 0…LS (≈10 ms per row, so a
+    // front moving ~400 px/s shifts ≤ 4 px between rows and stays crisp under linear filtering)
+    var NTR = 192, NTL = 192, LR = 2.0, LS = 1.8, NS = 64, ROWS = NTR + NTL, NORMT = 0.12;
     var DK = 4.2 / SRC / NK, KP = new Float32Array(NK), W = new Float32Array(NK), VD = new Float32Array(NK);
     for (var i = 0; i < NK; i++) { var kp = (i + 0.5) * DK, km = kp / S; KP[i] = kp; W[i] = Math.sqrt(G * km + SR * km * km * km); VD[i] = 2 * NU * km * km; }
     // Bessel J0, J1: Abramowitz & Stegun 9.4.1–9.4.6 (|error| < 1e-7)
@@ -102,13 +106,13 @@
     var JT = null, JL = null, NORM = 1, NORML = 1;
     // the spectrum of one ring at time t (s): source k·e^(−k²a²/4), phase ω·t, viscous decay
     var spec = function (t, A, out, o) {
-      var tp = t * SLOW;
+      var tp = t;
       for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * kp * Math.exp(-kp * kp * SRC * SRC / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
     };
     // a line impulse (the 1-D Cauchy–Poisson problem across the stroke): the same dispersion and decay, with
     // cos(k·d) for J0(k·r) and without the radial measure k
     var specL = function (t, A, out, o) {
-      var tp = t * SLOW;
+      var tp = t;
       for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * Math.exp(-kp * kp * SRC * SRC / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
     };
     var tableL = function () {
@@ -118,13 +122,11 @@
         var x = KP[k] * r * RMAX / (NR - 1);
         JL[(k * NR + r) * 2] = Math.cos(x); JL[(k * NR + r) * 2 + 1] = -KP[k] * Math.sin(x);
       }
-      var F = new Float32Array(NK), mx = 0; specL(0.5, 1, F, 0);
+      var F = new Float32Array(NK), mx = 0; specL(NORMT, 1, F, 0);
       for (var q = 0; q < NR; q++) { var s = 0; for (var kk = 0; kk < NK; kk++) s += F[kk] * JL[(kk * NR + q) * 2 + 1]; if (Math.abs(s) > mx) mx = Math.abs(s); }
       NORML = 1 / mx;
       return JL;
     };
-    // the age of trail profile row i, and back (rows bunched toward the young end, where the profile changes fastest)
-    var rowAge = function (i) { var u = i / (NA - 1); return LS * u * u; };
     var table = function () {
       if (JT) return JT;
       JT = new Float32Array(NR * NK * 2);
@@ -132,8 +134,8 @@
         var x = KP[k] * r * RMAX / (NR - 1);
         JT[(k * NR + r) * 2] = j0(x); JT[(k * NR + r) * 2 + 1] = -KP[k] * j1(x); // η and dη/dr kernels
       }
-      // normalise: a unit ring has its steepest slope = 1 at t = 0.5 s
-      var F = new Float32Array(NK), mx = 0; spec(0.5, 1, F, 0);
+      // normalise: a unit ring has its steepest slope = 1 at t = NORMT
+      var F = new Float32Array(NK), mx = 0; spec(NORMT, 1, F, 0);
       for (var q = 0; q < NR; q++) { var s = 0; for (var kk = 0; kk < NK; kk++) s += F[kk] * JT[(kk * NR + q) * 2 + 1]; if (Math.abs(s) > mx) mx = Math.abs(s); }
       NORM = 1 / mx;
       return JT;
@@ -144,16 +146,17 @@
     var FS_PROF = HEAD + "uniform sampler2D J,F;out vec4 o;void main(){ivec2 c=ivec2(gl_FragCoord.xy);vec2 s=vec2(0.);" +
       "for(int k=0;k<" + NK + ";k++)s+=texelFetch(F,ivec2(k,c.y),0).r*texelFetch(J,ivec2(c.x,k),0).rg;o=vec4(s,0.,1.);}";
     // the surface at half resolution: height, slope (screen axes, y down) and where water shows
-    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "];uniform int nR,nS;in vec2 v;out vec4 o;" +
+    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "];uniform int nR,nS;uniform float LA;in vec2 v;out vec4 o;" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;float h=0.;vec2 s=vec2(0.);" +
       "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}" +
-      "for(int i=0;i<" + SLOTS + ";i++){vec4 q=I[i];if(q.z<=0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + RMAX.toFixed(1) + ")continue;" +
-      "vec2 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(float(i)+.5)/" + ROWS.toFixed(1) + ")).rg;h+=e.x;s+=e.y*d/max(r,.001);}" +
+      "for(int i=0;i<" + SLOTS + ";i++){vec4 q=I[i];if(q.w==0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + RMAX.toFixed(1) + ")continue;" +
+      "vec2 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rg*q.w;h+=e.x;s+=e.y*d/max(r,.001);}" +
       // the trail: the nearest point of the stroke polyline gives the distance, the age there and the strength
       "if(nS>1){float bd=1e9,ba=0.,bs=0.;vec2 bv=vec2(0.);for(int i=1;i<" + NS + ";i++){if(i>=nS)break;vec4 a=S[i-1],b=S[i];if(a.w<=0.||b.w<=0.)continue;" +
       "vec2 ab=b.xy-a.xy,ap=p-a.xy;float u=clamp(dot(ap,ab)/max(dot(ab,ab),1e-3),0.,1.);vec2 dv=ap-ab*u;float dd=dot(dv,dv);if(dd<bd){bd=dd;bv=dv;ba=mix(a.z,b.z,u);bs=mix(a.w,b.w,u);}}" +
-      "float r=sqrt(bd);if(r<" + RMAX.toFixed(1) + "){float u=sqrt(clamp(ba/" + LS.toFixed(2) + ",0.,1.))*" + (NA - 1).toFixed(1) + ";" +
-      "vec2 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(" + SLOTS.toFixed(1) + "+u+.5)/" + ROWS.toFixed(1) + ")).rg*bs;h+=e.x;s+=e.y*bv/max(r,.001);}}" +
+      // a finite stroke spreads like a point source far away (∝ 1/√r) and fades out over the last third of its life
+      "float r=sqrt(bd),u=clamp(ba/" + LS.toFixed(2) + ",0.,1.);if(r<" + RMAX.toFixed(1) + "&&u<1.){float g=bs*LA*inversesqrt(1.+r/90.)*(1.-smoothstep(.6,1.,u));" +
+      "vec2 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(" + NTR.toFixed(1) + "+u*" + (NTL - 1).toFixed(1) + "+.5)/" + ROWS.toFixed(1) + ")).rg*g;h+=e.x;s+=e.y*bv/max(r,.001);}}" +
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
       "o=vec4(h,s,m);}";
     // caustics (after Evan Wallace): a grid refracted onto the floor; each triangle adds old area / new area
@@ -236,7 +239,7 @@
         var dir = seed + (a * 0.618034 % 1 - 0.5) * 3.4 + (Math.random() - 0.5) * 0.4;
         AW.push({ kx: Math.cos(dir) * k, ky: Math.sin(dir) * k, amp: (0.0042 + Math.random() * 0.003) / k, w: Math.sqrt(G * km + SR * km * km * km) * ASLOW, ph: Math.random() * 6.283 });
       }
-      var Fd = new Float32Array(NK * ROWS), Su = new Float32Array(NS * 4), Iu = new Float32Array(SLOTS * 4), Ru = new Float32Array(128), Ku = new Float32Array(128);
+      var pDone = 0, Fd = new Float32Array(NK * ROWS), Su = new Float32Array(NS * 4), Iu = new Float32Array(SLOTS * 4), Ru = new Float32Array(128), Ku = new Float32Array(128);
       var W_ = 0, H_ = 0, sw = 0, shh = 0, lost = false, hadRings = true, Q = 0, RS = [0, 0, 0, 0];
       // the surface and its caustics are re-simulated only when something moved them: every frame while rings
       // live, on scroll or a layout change, else at ~30 Hz for the slow ambient swell (simT, simK)
@@ -275,37 +278,29 @@
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
         upload(tFi, fishC, szF); upload(tSh, shC, szS);
         work.up = fishC.width * fishC.height + shC.width * shC.height; work.prof = work.sim = work.cau = 0;
-        // 1 · ring profiles, one row per live ring
+        // 1 · the profile table, once, 48 rows a frame (ring rows with the J0 kernel, trail rows with cos)
+        if (pDone < ROWS) {
+          if (!pDone) {
+            for (var ri = 0; ri < NTR; ri++) spec(LR * ri / (NTR - 1), NORM, Fd, ri * NK);
+            for (var li = 0; li < NTL; li++) specL(LS * li / (NTL - 1), -NORML, Fd, (NTR + li) * NK); // a finger pushes the surface down
+            gl.bindTexture(gl.TEXTURE_2D, tF); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NK, ROWS, gl.RED, gl.FLOAT, Fd);
+          }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fP); gl.viewport(0, pDone, NR, 48); gl.useProgram(Pp.p);
+          bindT(Pp, "J", 0, pDone < NTR ? tJ : tJL); bindT(Pp, "F", 1, tF);
+          gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          pDone += 48; work.prof = NR * 48;
+        }
+        // rings: a row coordinate (their age) and an amplitude each
         var nI = 0;
         for (var i = 0; i < rings.length && nI < SLOTS; i++) {
-          var R0 = rings[i], env = Math.min(1, R0.t / 0.5), life = R0.life;
-          env *= env * (3 - 2 * env) * (R0.t > life - 1.4 ? Math.max(0, (life - R0.t) / 1.4) : 1);
-          if (env <= 0 || !(R0.s > 0)) continue;
-          spec(R0.t, NORM * R0.s * look.ring * env, Fd, nI * NK);
-          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = 1; nI++;
+          var R0 = rings[i], env = Math.min(1, R0.t / 0.05), life = Math.min(R0.life, LR);
+          env *= R0.t > life - 0.6 ? Math.max(0, (life - R0.t) / 0.6) : 1;
+          if (env <= 0 || !(R0.s > 0) || R0.t >= LR) continue;
+          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; nI++;
         }
-        for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 2] = 0;
-        if (nI) {
-          gl.bindTexture(gl.TEXTURE_2D, tF); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NK, nI, gl.RED, gl.FLOAT, Fd);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fP); gl.viewport(0, 0, NR, nI); gl.useProgram(Pp.p);
-          bindT(Pp, "J", 0, tJ); bindT(Pp, "F", 1, tF);
-          gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
-          work.prof = NR * nI;
-        }
-        // 1b · the trail's profiles: one row per age, a line source each
+        for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 3] = 0;
         var nS = trail && trail.n > 1 ? Math.min(NS, trail.n) : 0;
-        if (nS) {
-          for (var ai = 0; ai < NA; ai++) {
-            var ag = rowAge(ai), en = Math.min(1, ag / 0.12 + 0.15) * Math.pow(Math.max(0, 1 - ag / LS), 1.7);
-            specL(ag, NORML * look.ring * en, Fd, (SLOTS + ai) * NK);
-          }
-          gl.bindTexture(gl.TEXTURE_2D, tF); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, SLOTS, NK, NA, gl.RED, gl.FLOAT, Fd.subarray(SLOTS * NK));
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fP); gl.viewport(0, SLOTS, NR, NA); gl.useProgram(Pp.p);
-          bindT(Pp, "J", 0, tJL); bindT(Pp, "F", 1, tF);
-          gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
-          work.prof += NR * NA;
-          for (var si = 0; si < nS * 4; si++) Su[si] = trail.a[si];
-        }
+        if (nS) for (var si = 0; si < nS * 4; si++) Su[si] = trail.a[si];
         // 2 · the surface, 3 · caustics, their penumbra: only when something moved them
         var nR = Math.min(32, rects.n != null ? rects.n : rects.length), key = sy + look.amb * 7 + look.cd * 13 + look.cb * 17 + nR * 19;
         for (var q = 0; q < nR; q++) { var b = rects[q]; key += b.l * 3 + b.t * 5 + b.r * 7 + b.b * 11 + b.keep; Ru[q * 4] = b.l; Ru[q * 4 + 1] = b.t; Ru[q * 4 + 2] = b.r; Ru[q * 4 + 3] = b.b; Ku[q * 4] = b.keep; Ku[q * 4 + 1] = Math.max(1, b.f); }
@@ -318,7 +313,7 @@
           gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
           bindT(Ps, "P", 0, tP);
           gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
-          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); if (nS) gl.uniform4fv(Ps.u.S, Su);
+          gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); if (nS) gl.uniform4fv(Ps.u.S, Su);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
           gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -355,8 +350,8 @@
       return api;
     }
     // the radius of a ring's steepest crest (CSS px) at t seconds, for the fish it nudges
-    var front = function (t) { return 14 + 68 * t; };
-    return { create: create, front: front, life: 5, trailLife: LS, trailN: NS };
+    var front = function (t) { return 6 + 400 * t; };
+    return { create: create, front: front, life: LR, trailLife: LS, trailN: NS };
   })();
 
   var instances = [];
@@ -696,7 +691,7 @@
     var L_ = []; // listeners to remove on destroy
     var on = function (t, ev, fn, o) { t.addEventListener(ev, fn, o); L_.push([t, ev, fn, o]); };
     // ── water rings: a few at a time, spawned by distance and time, never per mousemove ──
-    var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 3.6, RIP_MAX = 5, fronts = [], wakeN = 0;
+    var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 2.0, RIP_MAX = 5, fronts = [], wakeN = 0;
     var ripLife = function () { return realLive ? WATER.life : RIP_LIFE; };
     var rpz = function () { return page && !O.fixed ? 1 : 0; }; // in parallax mode the rings ride on the page
     // the surface holds about one firm ring's worth of disturbance (Σ strength × envelope ≤ RIP_SUM); past
@@ -717,7 +712,7 @@
     // mouse/pen: starts after 6 px with the button held. touch: after a ~250 ms hold, or when the first move is
     // clearly horizontal; a vertical swipe stays a scroll (we never preventDefault; if the browser takes the
     // gesture it sends pointercancel and the stroke simply ends there)
-    var trl = [], press = null, TRL_LS = 3.4, TRL_N = 64, trA = { n: 0, a: new Float32Array(TRL_N * 4) };
+    var trl = [], press = null, TRL_LS = WATER.trailLife, TRL_N = 64, trA = { n: 0, a: new Float32Array(TRL_N * 4) };
     var trOn = function () { return O.ripples && O.trail !== false && !RM.matches; };
     var trCut = function () { if (trl.length && trl[trl.length - 1].s > 0) trl.push({ x: 0, y: 0, t: 0, s: 0 }); };
     var trMove = function (x, y, sp, now) {
@@ -813,8 +808,8 @@
     if (page) on(Wn, "scroll", function () { sy = Wn.scrollY || 0; wake(); }, { passive: true });
 
     // ── simulation ────────────────────────────────────────────────────────────
-    var ripR = function (r) { if (realLive) return WATER.front(r.t); var t = r.t * (r.s >= 1 ? 1.12 : 1); return 78 * t / (1 + 0.2 * t); };
-    var ripEnv = function (r) { var u = r.t / r.life; return M.min(1, r.t / 0.2) * M.pow(M.max(0, 1 - u), 1.7) * r.s * r.e; };
+    var ripR = function (r) { if (realLive) return WATER.front(r.t); return 6 + 300 * r.t * (r.s >= 1 ? 1.1 : 1); }; // flat: brisk, like the real fronts
+    var ripEnv = function (r) { var u = r.t / r.life; return M.min(1, r.t / 0.05) * M.pow(M.max(0, 1 - u), 1.2) * r.s * r.e; };
     var step = function (dt) {
       T += dt;
       var rm = RM.matches;
@@ -1280,9 +1275,9 @@
       for (var ri = 0; ri < (realLive ? 0 : rip.length); ri++) {
         var rp = rip[ri], r0 = ripR(rp), en = ripEnv(rp), ry = rp.y - sy * rpz();
         for (var wk = 0; wk < 3; wk++) {
-          var rk = r0 - wk * (14 + r0 * 0.07);
+          var rk = r0 - wk * (9 + r0 * 0.035); // a short train: the finer, faster front leads
           if (rk < 2) break;
-          var ak = en * [1, 0.55, 0.28][wk] / (1 + rk / 110);
+          var ak = en * [1, 0.55, 0.28][wk] / M.sqrt(1 + rk / 40);
           if (ak > 0.004) fronts.push({ x: rp.x, y: ry, r: rk, b: 8 + rk * 0.06, a: ak, w: [1, 0.8, 0.62][wk], q: rp.q });
         }
       }
@@ -1397,10 +1392,10 @@
         for (var wv = 0; wv < 2; wv++) for (var sd = -1; sd <= 1; sd += 2) for (var a1 = 1; a1 < trl.length; a1++) {
           var A1 = trl[a1 - 1], B1 = trl[a1];
           if (A1.s <= 0 || B1.s <= 0) continue;
-          var tm = (A1.t + B1.t) / 2, en2 = M.min(1, tm / 0.2) * M.pow(M.max(0, 1 - tm / TRL_LS), 1.7) * (A1.s + B1.s) / 2;
-          var rA = 78 * A1.t / (1 + 0.2 * A1.t) - wv * 14, rB = 78 * B1.t / (1 + 0.2 * B1.t) - wv * 14;
+          var tm = (A1.t + B1.t) / 2, en2 = M.min(1, tm / 0.04) * M.pow(M.max(0, 1 - tm / TRL_LS), 1.2) * (A1.s + B1.s) / 2;
+          var rA = 4 + 300 * A1.t - wv * 10, rB = 4 + 300 * B1.t - wv * 10; // thin fronts leaving the stroke at ~300 px/s
           if (rA < 1 && rB < 1) continue;
-          var r2 = M.max(rA, rB), ak2 = en2 * [1, 0.5][wv] / (1 + r2 / 110);
+          var r2 = M.max(rA, rB), ak2 = en2 * [1, 0.5][wv] / M.sqrt(1 + r2 / 40);
           if (ak2 < 0.004) continue;
           var lw2 = 1 + r2 * 0.006;
           rA = M.max(0, rA); rB = M.max(0, rB);
@@ -1716,5 +1711,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.3.1" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.3.2" };
 });
