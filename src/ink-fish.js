@@ -174,10 +174,9 @@
       "h+=Dm.z*(.1*g-c);s+=Dm.z*(2.*r/(w*w)*c-.1*2.*x/(.16*w)*g)*d/max(r,.001);" +
       "float sg=.16*w;float dz=.5*Dm.z*(.1*(g*(4.*x*x-2.)/(sg*sg)-2.*x*g/(sg*max(r,1.)))-c*(4.*r*r/(w*w*w*w)-4./(w*w)));cv+=dz;}" +
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
-      // .x, light: minus the disturbance's Laplacian (the swell left out), positive along each crest.
-      // .x, dark (Cp.z): the slope variance this half-res pixel cannot resolve (curvature × pixel, Kaplanyan-style):
-      // the composite widens and dims its glints by it instead of drawing detail it would alias
-      "float ox=-cv;if(Cp.z>.5)ox=Cp.x*cv*cv;" +
+      // .x: minus the disturbance's Laplacian (the swell left out), positive along each crest; the dark composite
+      // also reads its square as the slope variance this half-res pixel cannot resolve (Kaplanyan-style roughness)
+      "float ox=-cv;" +
       "o=vec4(ox,s,m);}";
     // v1.5 · the drag wake: a height field (h, v) stepped at a fixed rate on a coarse grid. Each step
     //   v += c²∇²h − β∇⁴h − κh + μ∇²v − pressure;  v *= damping;  h += v
@@ -238,8 +237,10 @@
       "add+=sky*k3.y*sl;mul*=1.-k3.z*max(-g,0.);}" +  // calm water: skipped
       // v1.5 dark room: no drawn slivers. The dark sky's one bright patch (a lamp just off the zenith) is reflected
       // where a facet's slope matches k4.x·(−ld): a slope-space GGX lobe of width k4.y, widened by the slope variance
-      // the pixel cannot resolve (.x) and dimmed in proportion, so fine detail turns into a soft sheen, not moiré
-      "if(k4.z>.5){vec2 ds=s+k4.x*ld;float a2=k4.y*k4.y+w.x,gg=k4.y*k4.y/a2*pow(a2/(a2+dot(ds,ds)),2.);add+=sky*k3.y*gg*m;}" +
+      // the pixel cannot resolve (k4.w·.x²) and dimmed in proportion, so fine detail turns into a soft sheen, not
+      // moiré; only disturbed water (a crest, .x > 0) catches it, plus a faint sky sheen along each crest. Calm
+      // water and the idle swell stay dark
+      "if(k4.z>.5&&w.x!=0.){float g=max(w.x*k3.x*m,0.);g=g/(1.+g);vec2 ds=s+k4.x*ld;float va=k4.w*w.x*w.x,a2=k4.y*k4.y+va,gg=k4.y*k4.y/a2*pow(a2/(a2+dot(ds,ds)),2.);add+=sky*k3.y*m*(.3*pow(g,k3.w)+gg*sqrt(g));}" +
       // dark room: the finger's meniscus as sky on a curved wall, one thin bright crescent on the far side of the
       // light and a darker, soft-edged core where the dip looks down into the dark (Dc.z = 0 in the light theme)
       "if(Dc.z!=0.){vec2 d=p-Dc.xy;float r=length(d),dw=Dc.w,x=(r-1.12*dw)/(.11*dw);" +
@@ -540,7 +541,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.10, 0.025, 1, 0], qrv: 0.33, qgg: 2.5, qdmc: 1, qwv: 0.02 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0, 5], qcp: [0.10, 0.025, 1, 4], qgg: 2.5, qdmc: 1, qwv: 0.02 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
