@@ -30,7 +30,7 @@ async def shot(b, U):
             if not HOVER and not down and t >= T0 - 1e-9: await pg.mouse.down(); down = True
         await pg.evaluate("__step(1000/60)")
     p = f"/tmp/wake_{THEME}_{'h' if HOVER else 'p'}_{U}.png"
-    await pg.screenshot(path=p); await pg.close()
+    await pg.screenshot(path=p, timeout=180000); await pg.close()
     return p, n_end, errs
 async def main():
     res = {}; stills = {}
@@ -42,6 +42,7 @@ async def main():
           for U in US: res[U] = await shot(b, U)
           # stills at the same frame counts (pointer never enters)
           for U in US:
+              if os.environ.get("REUSE_STILLS") and os.path.exists(f"/tmp/wake_{THEME}_still_{U}.png"): stills[U] = f"/tmp/wake_{THEME}_still_{U}.png"; continue
               pg = await b.new_page(viewport={"width": 1440, "height": 900}, color_scheme=THEME)
               await pg.add_init_script(INIT)
               async def route(r):
@@ -53,7 +54,7 @@ async def main():
               for i in range(300): await pg.evaluate("__step(1000/60)")
               await pg.wait_for_timeout(1500)
               for i in range(res[U][1] + 1): await pg.evaluate("__step(1000/60)")
-              sp = f"/tmp/wake_{THEME}_still_{U}.png"; await pg.screenshot(path=sp); await pg.close(); stills[U] = sp
+              sp = f"/tmp/wake_{THEME}_still_{U}.png"; await pg.screenshot(path=sp, timeout=180000); await pg.close(); stills[U] = sp
           await b.close()
     print(f"| U px/s | U cm/s | wake strength Σ|dL| behind (×1e3) | mean |dL| in wedge | half-angle: arm slope fit 100–500 px behind (°) [offset px] | max-contrast median (°) | outer edge (50 %) (°) | asin(cg,min/U) (°) | crests across the wedge 200 px behind: median spacing (px) | errors |")
     print("|---|---|---|---|---|---|---|---|---|---|")
