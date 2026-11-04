@@ -162,7 +162,7 @@
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;float h=0.;vec2 s=vec2(0.);" +
       "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}vec2 s0=s;float cv=0.,cd=0.;" +
       "for(int i=0;i<" + SLOTS + ";i++){vec4 q=I[i];if(q.w==0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + RMAX.toFixed(1) + ")continue;" +
-      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rgb*q.w;h+=e.x;s+=e.y*d/max(r,.001);cv+=e.z;vec4 qq=Q[i];cd+=e.z*qq.y*smoothstep(1.2*qq.x,1.75*qq.x,r);}" +
+      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rgb*q.w;h+=e.x;s+=e.y*d/max(r,.001);cv+=e.z;vec4 qq=Q[i];cd+=e.z*qq.y*smoothstep(1.4*qq.x+20.,2.*qq.x+40.,r);}" +
       // the trail: the nearest point of the stroke polyline gives the distance, the age there and the strength
       "if(nS>1){float bd=1e9,ba=0.,bs=0.;vec2 bv=vec2(0.);for(int i=1;i<" + NS + ";i++){if(i>=nS)break;vec4 a=S[i-1],b=S[i];if(a.w<=0.||b.w<=0.)continue;" +
       "vec2 ab=b.xy-a.xy,ap=p-a.xy;float u=clamp(dot(ap,ab)/max(dot(ab,ab),1e-3),0.,1.);vec2 dv=ap-ab*u;float dd=dot(dv,dv);if(dd<bd){bd=dd;bv=dv;ba=mix(a.z,b.z,u);bs=mix(a.w,b.w,u);}}" +
@@ -182,7 +182,7 @@
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
       // .x: minus the disturbance's Laplacian (the ambient swell left out): positive along each crest, for the slivers
       "float ox=-cv;if(Cp.z>.5){vec2 sd=s-s0;float vr=.5+.5*sin(dot(p,vec2(.043,.029))+1.7*sin(dot(p,vec2(-.017,.031))));" +
-      "float c=-cd*inversesqrt(cd*cd+Cp.x*Cp.x*dot(sd,sd)+1e-12),g=max(-cd*Cp.w*m-.02,0.);g=g/(1.+g);" +
+      "float c=-cd*inversesqrt(cd*cd+Cp.x*Cp.x*dot(sd,sd)+1e-12),g=max(-cd*Cp.w*m-.05,0.);g=g/(1.+g);" +
       "ox=pow(g,.7)*(.6+.4*vr)*pow(max(c,0.),Cp.y*(.8+.4*vr));}" +  // dark room: the finished sliver (crest phase vs the disturbance's own slope)
       "o=vec4(ox,s,m);}";
     // caustics (after Evan Wallace): a grid refracted onto the floor; each triangle adds old area / new area
@@ -335,7 +335,7 @@
           var R0 = rings[i], env = Math.min(1, R0.t / 0.05), life = Math.min(R0.life, LR);
           env *= R0.t > life - 0.6 ? Math.max(0, (life - R0.t) / 0.6) : 1;
           if (env <= 0 || !(R0.s > 0) || R0.t >= LR) continue;
-          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = 300 * R0.t + 8; Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.45); nI++;
+          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = 300 * R0.t + 8; Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.35); nI++;
         }
         for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 3] = 0;
         var nS = trail && trail.n > 1 ? Math.min(NS, trail.n) : 0;
@@ -476,7 +476,7 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [280, 0.85, 0, 5], qcp: [0.12, 13, 1, 0.7], qdmc: 1, qwv: 0.008 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [220, 0.85, 0, 5], qcp: [0.12, 16, 1, 0.7], qdmc: 1, qwv: 0.008 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
