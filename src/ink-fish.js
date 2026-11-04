@@ -729,7 +729,7 @@
         } else if (d < 6) return;
         P.act = true; trCut();
         if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.55; // a press that becomes a stroke: a softer splash, the line carries it
-        P.s = 0.03; trl.push(P.first = { x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
+        P.s = 0; trl.push(P.first = { x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
         trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); // the head follows the pointer until it is committed
         wake(); return;
       }
@@ -737,7 +737,7 @@
       // v1.4: below water's minimum wave speed (23 cm/s ≈ 380 px/s here) a straight stroke radiates almost nothing;
       // above it the stroke sheds a wake whose strength grows with speed (the dimple carries the slow case)
       var gate = M.max(0, M.min(1, (sp - 280) / 320)); gate = gate * gate * (3 - 2 * gate);
-      var st = 0.03 + 0.6 * gate;
+      var st = 0.6 * gate;
       P.s = P.s * 0.6 + st * 0.4;
       var H = trl[trl.length - 1];
       if (P.gap || !H || !H.h) { P.gap = 0; trl.push({ x: x, y: py, t: 0, s: P.s }); trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); wake(); return; }
