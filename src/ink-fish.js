@@ -1,4 +1,4 @@
-/*! ink-fish v1.4.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.5.0 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -1840,5 +1840,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.4.0" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.5.0" };
 });
