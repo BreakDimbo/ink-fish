@@ -1,0 +1,100 @@
+noise (99th pct |dL| late frames) 0.25; visibility threshold 2.00 grey levels (azimuthal mean)
+
+[press packet]  t(s)  inner  outer  centroid  peak|dL|
+    0.03    26    224     80.2   28.48
+    0.07    26    227     78.5   40.91
+    0.10    26    206     81.3   37.35
+    0.13    26    225     93.6   35.60
+    0.17    26    222    106.8   33.87
+    0.20    27    227    119.0   31.81
+    0.23    26    227    126.1   29.36
+    0.27    26    227    135.2   27.00
+    0.30    26    227    144.9   25.81
+    0.33    26    227    151.7   25.04
+    0.37    26    227    155.7   23.64
+    0.40    26    227    161.5   22.19
+    0.43    26    227    167.2   20.75
+    0.47    26    227    172.6   19.91
+    0.50    26    227    177.8   19.43
+    0.53    26    227    181.9   18.43
+    0.57    26    227    186.3   17.06
+    0.60    26    227    188.0   15.58
+    0.63    26    227    188.2   15.64
+    0.67    26    227    187.9   15.50
+    0.70    26    227    183.2    8.12
+    0.73    26    227    175.0    7.31
+    0.77    26    227    174.1    4.67
+    0.80    26    227    150.9    4.30
+    0.83    26     30    126.5    3.37
+    0.87    26     30    110.6    3.30
+    0.90    26     30     96.9    3.13
+    0.93    26     30     82.6    3.51
+    0.97    26     30     58.3    3.38
+    1.00    26     30     55.2    3.14
+    1.03    26     31     49.4    3.06
+    1.07    26     31     47.1    3.06
+    1.10    26     30     40.1    3.14
+    1.13    26     30     46.5    3.05
+    1.17    26     30     33.4    3.31
+    1.20    26     30     43.0    3.19
+  at t=0.30 s (centroid 145 px): 8 bright crests, 10 dark troughs above ±1.00: crests at r=[38, 100, 135, 160, 176, 191, 204, 216]
+  crest spacing: inner [62, 35, 25] … outer [15, 13, 12] px
+    t=0.17 s: 20 bright crests (r 28–226), centroid 107 px, spacing front [7, 6, 7] back [7, 7, 6]
+    t=0.20 s: 15 bright crests (r 28–226), centroid 119 px, spacing front [7, 7, 7] back [37, 22, 13]
+    t=0.23 s: 11 bright crests (r 28–226), centroid 126 px, spacing front [8, 7, 8] back [35, 24, 14]
+    t=0.27 s: 10 bright crests (r 28–226), centroid 135 px, spacing front [13, 10, 10] back [53, 35, 24]
+    t=0.30 s: 8 bright crests (r 28–226), centroid 145 px, spacing front [15, 13, 12] back [62, 35, 25]
+    t=0.33 s: 6 bright crests (r 28–226), centroid 152 px, spacing front [17, 15, 14] back [34, 25, 17]
+  visible (peak azimuthal |dL| > 2.00) until t=1.97 s after the press
+  full-screen: ≥ 0.5 % of the water ≥ 3 grey levels off until t=1.5666666666666667 s after the press
+
+[release packet]  t(s)  inner  outer  centroid  peak|dL|
+    0.03    26    197     74.8   20.61
+    0.07    26    201     74.8   28.98
+    0.10    26    172     80.6   26.20
+    0.13    26    211     95.1   22.80
+    0.17    29    215    108.7   21.60
+    0.20    26    227    120.3   20.54
+    0.23    40    227    128.2   19.66
+    0.27    50    227    138.3   18.56
+    0.30    66    227    149.7   17.80
+    0.33    80    227    157.3   17.57
+    0.37    92    227    161.0   16.29
+    0.40   107    227    166.6   15.26
+    0.43   120    227    171.5   14.38
+    0.47   134    227    177.1   13.62
+    0.50   148    227    183.3   13.37
+    0.53   145    227    186.7   12.49
+    0.57   156    227    191.9   11.44
+    0.60   168    227    194.5   10.16
+    0.63   181    227    197.8   10.19
+    0.67   194    227    199.9    9.94
+    0.70   188    225    198.9    4.45
+    0.73   198    227    201.3    3.96
+    0.77   210    226    207.5    2.98
+    0.80   224    227    207.4    2.73
+    0.83    -1     -1    205.6    0.80
+    0.87    -1     -1    201.5    0.64
+    0.90    -1     -1    204.3    0.35
+    0.93    -1     -1    211.7    0.44
+    0.97    -1     -1    209.5    0.16
+    1.00    -1     -1    150.0    0.10
+    1.03    -1     -1    145.6    0.05
+    1.07    -1     -1    152.9    0.04
+    1.10    -1     -1    150.3    0.05
+    1.13    -1     -1    119.5    0.05
+    1.17    -1     -1    144.1    0.02
+    1.20    -1     -1    119.3    0.05
+  calm-centre (inner) edge speed ≈ 311 px/s over 16 frames
+  outer front speed ≈ 138 px/s over 5 frames
+  at t=0.30 s (centroid 150 px): 7 bright crests, 10 dark troughs above ±1.00: crests at r=[102, 136, 159, 176, 191, 204, 216]
+  crest spacing: inner [34, 23, 17] … outer [15, 13, 12] px
+    t=0.17 s: 15 bright crests (r 28–226), centroid 109 px, spacing front [7, 7, 7] back [13, 36, 21]
+    t=0.20 s: 15 bright crests (r 28–226), centroid 120 px, spacing front [7, 7, 7] back [4, 33, 21]
+    t=0.23 s: 11 bright crests (r 28–226), centroid 128 px, spacing front [8, 7, 8] back [33, 23, 15]
+    t=0.27 s: 9 bright crests (r 28–226), centroid 138 px, spacing front [13, 10, 10] back [35, 22, 17]
+    t=0.30 s: 7 bright crests (r 28–226), centroid 150 px, spacing front [15, 13, 12] back [34, 23, 17]
+    t=0.33 s: 6 bright crests (r 28–226), centroid 157 px, spacing front [18, 15, 14] back [33, 24, 18]
+  visible (peak azimuthal |dL| > 2.00) until t=0.80 s after the release
+  per-pixel: <0.2 % of the disc above 3 grey levels from t=0.83 s
+  full-screen: ≥ 0.5 % of the water ≥ 3 grey levels off until t=1.5 s after the release

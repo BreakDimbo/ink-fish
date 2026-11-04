@@ -1,0 +1,4 @@
+| U px/s | U cm/s | wake strength Σ|dL| behind (×1e3) | mean |dL| in wedge | half-angle: arm slope fit 100–500 px behind (°) [offset px] | max-contrast median (°) | outer edge (50 %) (°) | asin(cg,min/U) (°) | crests across the wedge 200 px behind: median spacing (px) | errors |
+|---|---|---|---|---|---|---|---|---|---|
+| 1800 | 108 | 1568.6 | 5.76 | -1.3 [59] | 9.8 | 25.7 (n=41) | 9.5 | nan (2 crests) | [] |
+| 2400 | 144 | 1470.5 | 7.00 | 3.3 [11] | 4.9 | 19.2 (n=36) | 7.1 | nan (2 crests) | [] |
