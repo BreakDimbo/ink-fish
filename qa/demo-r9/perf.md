@@ -164,3 +164,13 @@ Set 2: idle only, at HEAD 5925cb8. Another agent's perf.py was also running.
 | 390 4x idle forced (HEAD 5925cb8, 2nd set) | 7.50 (6.70, 7.50, 8.15) | 8.05 (7.68, 8.05, 8.06) | +7% | |
 
 Verdict: idle is at parity within noise. The pooled idle medians are +1 %/+8 % at 1440 1×, −13 %/+14 % at 1440 4×, and +7 %/+4 % at 390 4×. Every Δ is smaller than v1.3.1's own run-to-run spread for that cell: 3.7, 13.6 and 3.9 ms. Drag is faster in v1.4 in all three cells (−6 to −10 %). Logs: perfx5a.log, perfx5b.log, perfx6.log.
+
+## Round 12 perf sanity at 6c6214f (perfx7, 16:53–16:59 SGT, forced real water, interleaved, 3 reps)
+| case | v1.3.1 lib ms (median, 3 runs) | v1.4 lib ms | Δ | v1.3.1 late% | v1.4 late% | errs |
+|---|---|---|---|---|---|---|
+| 1440 1x idle | 6.93 (7.46, 6.33, 6.93) | 6.86 (6.86, 6.54, 7.59) | -1% | 100 | 100 | 0 |
+| 1440 1x drag | 6.83 (6.71, 6.83, 7.05) | 6.45 (6.45, 6.29, 7.04) | -6% | 100 | 100 | 0 |
+| 390 4x idle | 7.88 (10.44, 7.88, 7.51) | 7.78 (8.61, 7.78, 7.61) | -1% | 100 | 100 | 0 |
+| 390 4x drag | 9.38 (11.24, 8.74, 9.38) | 8.28 (8.14, 8.28, 9.84) | -12% | 100 | 100 | 0 |
+
+No other perf.py was running during the run (pgrep checked at the start and during polling). The box was under load: load avg about 8–10 from the earlier renders and other agents, so absolute ms are inflated, but the interleaved deltas hold. Idle shows no regression.
