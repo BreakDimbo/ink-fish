@@ -1,0 +1,4 @@
+hover      {"frames": 101, "mean": 114.64158415835684, "trail": 0, "per_frame": {"comp": 1296000, "sim": 648000, "cau": 42804, "prof": 1724, "up": 1377000}}
+press-drag {"frames": 101, "mean": 149.9574257427513, "trail": 26, "per_frame": {"comp": 1296000, "sim": 648000, "cau": 42804, "prof": 6783, "up": 1377000}}
+hover      {"frames": 102, "mean": 115.63137254907804, "trail": 0, "per_frame": {"comp": 1296000, "sim": 648000, "cau": 42804, "prof": 1732, "up": 1377000}}
+press-drag {"frames": 101, "mean": 129.49207920774376, "trail": 26, "per_frame": {"comp": 1296000, "sim": 648000, "cau": 42804, "prof": 6783, "up": 1377000}}
