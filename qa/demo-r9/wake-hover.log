@@ -1,41 +1,9 @@
-Traceback (most recent call last):
-  File "/workspace/ink-fish/qa/demo-r9/wake.py", line 95, in <module>
-    asyncio.run(main())
-    ~~~~~~~~~~~^^^^^^^^
-  File "/usr/lib/python3.13/asyncio/runners.py", line 195, in run
-    return runner.run(main)
-           ~~~~~~~~~~^^^^^^
-  File "/usr/lib/python3.13/asyncio/runners.py", line 118, in run
-    return self._loop.run_until_complete(task)
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
-  File "/usr/lib/python3.13/asyncio/base_events.py", line 725, in run_until_complete
-    return future.result()
-           ~~~~~~~~~~~~~^^
-  File "/workspace/ink-fish/qa/demo-r9/wake.py", line 56, in main
-    sp = f"/tmp/wake_{THEME}_still_{U}.png"; await pg.screenshot(path=sp); await pg.close(); stills[U] = sp
-                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/box/.local/lib/python3.13/site-packages/playwright/async_api/_generated.py", line 10883, in screenshot
-    await self._impl_obj.screenshot(
-    ...<13 lines>...
-    )
-  File "/home/box/.local/lib/python3.13/site-packages/playwright/_impl/_page.py", line 830, in screenshot
-    encoded_binary = await self._channel.send(
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^
-        "screenshot", self._timeout_settings.timeout, params
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/box/.local/lib/python3.13/site-packages/playwright/_impl/_connection.py", line 76, in send
-    return await self._connection.wrap_api_call(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "/home/box/.local/lib/python3.13/site-packages/playwright/_impl/_connection.py", line 632, in wrap_api_call
-    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-playwright._impl._errors.TimeoutError: Page.screenshot: Timeout 30000ms exceeded.
-Call log:
-  - taking page screenshot
-  - waiting for fonts to load...
-  - fonts loaded
-
+| U px/s | U cm/s | wake strength Σ|dL| behind (×1e3) | mean |dL| in wedge | half-angle: arm slope fit 100–500 px behind (°) [offset px] | max-contrast median (°) | outer edge (50 %) (°) | asin(cg,min/U) (°) | crests across the wedge 200 px behind: median spacing (px) | errors |
+|---|---|---|---|---|---|---|---|---|---|
+| 200 | 12 | 702.8 | 1.76 | -10.2 [259] | 34.8 | 42.2 (n=44) | 90.0 | 46.0 (5 crests) | [] |
+| 400 | 24 | 1087.4 | 2.51 | -10.9 [208] | 29.0 | 44.7 (n=44) | 47.6 | 25.0 (12 crests) | [] |
+| 600 | 36 | 1189.4 | 2.94 | 28.6 [6] | 30.5 | 44.2 (n=44) | 29.5 | 35.5 (4 crests) | [] |
+| 900 | 54 | 1305.4 | 3.68 | 28.2 [-24] | 25.0 | 40.5 (n=44) | 19.2 | 21.0 (5 crests) | [] |
+| 1200 | 72 | 1502.2 | 4.52 | 18.5 [-3] | 17.1 | 35.6 (n=44) | 14.3 | nan (0 crests) | [] |
+| 1800 | 108 | 1676.2 | 6.06 | 9.4 [12] | 12.7 | 26.3 (n=42) | 9.5 | 18.5 (8 crests) | [] |
+| 2400 | 144 | 993.8 | 4.50 | 2.9 [13] | 3.3 | 18.8 (n=28) | 7.1 | nan (0 crests) | [] |
