@@ -19,6 +19,8 @@ async def main():
             await pg.goto(U); await pg.wait_for_timeout(600)
             st = lambda ms=1000/30: pg.evaluate(f"__step({ms})")
             for i in range(90): await st()
+            async def st3():  # 0.1 s as three 30 fps frames (a 100 ms frame would hit the 4-step cap and run the clock slow)
+                for _ in range(3): await st()
             async def peek(): return await pg.evaluate(f"(()=>{{var k={A}._peek();return k?{{grid:k.grid,hmax:k.hmax}}:null}})()")
             async def flick(y):
                 await pg.mouse.move(250, y); await st(); await pg.mouse.down()
@@ -28,22 +30,22 @@ async def main():
             # 1) calm-sleep: grid awake until ~2 s after the lift, then cleared and stopped
             await flick(520); tl = []
             for k in range(1, 31):
-                await st(100)
+                await st3()
                 if k in (5, 15, 18, 21, 25, 30): tl.append([round(k * 0.1, 1), await peek()])
                 if k in (5, 15, 19, 25): await pg.screenshot(path=f"{OUT}/{theme}-sleep-{k/10:.1f}s.png")
             log["sleep"] = tl
             # 2) hidden-pause: hide mid-wake, the loop stops (no frames counted), show again, the wake resumes and still sleeps
-            await flick(520); await st(100); await st(100)
+            await flick(520); await st3(); await st3()
             n0 = await pg.evaluate(f"{A}.stats.n")
             await pg.evaluate("Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'hidden'});document.dispatchEvent(new Event('visibilitychange'))")
-            for i in range(30): await st(100)
+            for i in range(30): await st3()
             n1 = await pg.evaluate(f"{A}.stats.n"); run_h = await pg.evaluate(f"{A}.running")
             await pg.evaluate("delete document.hidden;delete document.visibilityState;Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'visible'});document.dispatchEvent(new Event('visibilitychange'))")
             await st(); await st(); after = await peek(); await pg.screenshot(path=f"{OUT}/{theme}-after-hidden.png")
-            for i in range(25): await st(100)
+            for i in range(25): await st3()
             log["hidden"] = {"frames while hidden (3 s)": n1 - n0, "running while hidden": run_h, "right after show": after, "2.5 s after show": await peek()}
             # 3) scroll: wake made, page scrolled 200 px mid-life: the wake should move up 200 px with the page
-            for i in range(10): await st(100)
+            for i in range(10): await st3()
             await flick(620); await st(); await pg.screenshot(path=f"{OUT}/{theme}-scroll-before.png")
             await pg.evaluate("window.scrollBy(0,200)"); await st(); await st(); await pg.screenshot(path=f"{OUT}/{theme}-scroll-after.png")
             log["scroll"] = {"scrollY": await pg.evaluate("scrollY"), "peek": await peek()}

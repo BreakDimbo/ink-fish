@@ -461,7 +461,7 @@
           var m = []; for (var i = 0; i < b.length; i += 4) m.push(Math.hypot(b[i + 1], b[i + 2])); m.sort(function (x, y) { return x - y; });
           var g = new Float32Array(gx * gy * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, fG[gi]); gl.readPixels(0, 0, gx, gy, gl.RGBA, gl.FLOAT, g); gl.bindFramebuffer(gl.FRAMEBUFFER, null); var gm = 0; for (i = 0; i < g.length; i += 4) gm = Math.max(gm, Math.abs(g[i]));
           if (full) { var hh = new Array(gx * gy); for (i = 0; i < gx * gy; i++) hh[i] = Math.round(g[i * 4] * 1e4) / 1e4; return { gx: gx, gy: gy, h: hh }; }
-          return { hmax: gm, gpr: gPr, gpx: gPx, gpy: gPy, p50: m[m.length >> 1], p99: m[Math.floor(m.length * 0.99)], p999: m[Math.floor(m.length * 0.999)], max: m[m.length - 1], grid: gLive }; },
+          return { hmax: gm, gpr: gPr, gpx: gPx, gpy: gPy, p50: m[m.length >> 1], p99: m[Math.floor(m.length * 0.99)], p999: m[Math.floor(m.length * 0.999)], max: m[m.length - 1], grid: gLive, T: gT, last: gLast }; },
         get lost() { return lost; },
         get quality() { return Q; },
         setQuality: function (q) { q = q ? 1 : 0; if (q === Q) return; Q = q; W_ = -1; resize(RS[0], RS[1], RS[2], RS[3]); },
