@@ -158,31 +158,32 @@
       "float l=0.;for(int k=0;k<" + NK + ";k++){float f=texelFetch(F,ivec2(k,c.y),0).r,kp=(float(k)+.5)*" + DK.toFixed(9) + ";vec2 j=texelFetch(J,ivec2(c.x,k),0).rg;s+=f*j;l-=f*kp*kp*j.x;}o=vec4(s,l,1.);}";
     // (.b: the Laplacian, ∇²J0(kr) = −k²J0(kr) and (cos kx)'' = −k² cos kx: it marks each crest, finest the sharpest)
     // the surface at half resolution: height, slope (screen axes, y down) and where water shows
-    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "],Dm,Cp;uniform int nR,nS;uniform float LA;in vec2 v;out vec4 o;" +
+    var FS_SIM = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + SLOTS + "],A[16],R[32],K[32],S[" + NS + "],Dm,Cp,Q[" + SLOTS + "];uniform int nR,nS;uniform float LA,WV;in vec2 v;out vec4 o;" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;float h=0.;vec2 s=vec2(0.);" +
-      "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}vec2 s0=s;float cv=0.;" +
+      "for(int i=0;i<16;i++){vec4 a=A[i];float t=dot(a.xy,p)-a.w;h+=a.z*sin(t);s+=a.z*cos(t)*a.xy;}vec2 s0=s;float cv=0.,cd=0.;" +
       "for(int i=0;i<" + SLOTS + ";i++){vec4 q=I[i];if(q.w==0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + RMAX.toFixed(1) + ")continue;" +
-      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rgb*q.w;h+=e.x;s+=e.y*d/max(r,.001);cv+=e.z;}" +
+      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",q.z)).rgb*q.w;h+=e.x;s+=e.y*d/max(r,.001);cv+=e.z;vec4 qq=Q[i];cd+=e.z*qq.y*smoothstep(1.2*qq.x,1.75*qq.x,r);}" +
       // the trail: the nearest point of the stroke polyline gives the distance, the age there and the strength
       "if(nS>1){float bd=1e9,ba=0.,bs=0.;vec2 bv=vec2(0.);for(int i=1;i<" + NS + ";i++){if(i>=nS)break;vec4 a=S[i-1],b=S[i];if(a.w<=0.||b.w<=0.)continue;" +
       "vec2 ab=b.xy-a.xy,ap=p-a.xy;float u=clamp(dot(ap,ab)/max(dot(ab,ab),1e-3),0.,1.);vec2 dv=ap-ab*u;float dd=dot(dv,dv);if(dd<bd){bd=dd;bv=dv;ba=mix(a.z,b.z,u);bs=mix(a.w,b.w,u);}}" +
       // a finite stroke spreads like a point source far away (∝ 1/√r) and fades out over the last third of its life
       "float r=sqrt(bd),u=clamp(ba/" + LS.toFixed(2) + ",0.,1.);if(r<" + RMAX.toFixed(1) + "&&u<1.){float g=bs*LA*inversesqrt(1.+r/90.)*(1.-smoothstep(.6,1.,u));" +
-      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(" + NTR.toFixed(1) + "+u*" + (NTL - 1).toFixed(1) + "+.5)/" + ROWS.toFixed(1) + ")).rgb*g;h+=e.x;s+=e.y*bv/max(r,.001);cv+=e.z;" +
+      "vec3 e=texture(P,vec2(r*" + ((NR - 1) / NR / RMAX).toFixed(9) + "+" + (0.5 / NR).toFixed(9) + ",(" + NTR.toFixed(1) + "+u*" + (NTL - 1).toFixed(1) + "+.5)/" + ROWS.toFixed(1) + ")).rgb*g;h+=e.x;s+=e.y*bv/max(r,.001);cv+=e.z;cd+=e.z*exp(-ba/.45);" +
       // v1.4: inside a fast V, fine divergent wavelets. Each point of the track sheds short capillary crests that run
       // outward slower than the arms (WV < the arm speed), so with the age growing along the track their crest lines lie
       // diagonal, fanning out from the track; the wavelength lengthens with age (fine at the tip, coarser downstream)
       "float ta=max(ba,.03),kw=" + (2 * Math.PI / 7).toFixed(4) + "/(1.+ta/.45),ph=kw*r-" + (2 * Math.PI / 7 * 420).toFixed(2) + "*.45*log(1.+ta/.45)," +
-      "wn=(1.-smoothstep(.62,.95,r/(270.*ta+6.)))*smoothstep(3.,12.,r)*exp(-ta/.6)*smoothstep(.5,.78,bs)*g*" + WAVELET.toFixed(4) + ";" +
-      "if(wn>0.){float cp=cos(ph),sp=sin(ph);h+=wn*cp/(kw*kw);s-=wn*sp/kw*bv/max(r,.001);cv-=wn*cp;}}}" +
+      "wn=(1.-smoothstep(.62,.95,r/(270.*ta+6.)))*smoothstep(3.,12.,r)*exp(-ta/.6)*smoothstep(.5,.78,bs)*g*WV;" +
+      "if(wn>0.){float cp=cos(ph),sp=sin(ph);h+=wn*cp/(kw*kw);s-=wn*sp/kw*bv/max(r,.001);cv-=wn*cp;cd-=wn*cp*exp(-ba/.45);}}}" +
       // the finger itself: a dimple held by its meniscus (core dip + a low rim), riding exactly under the pointer
       "if(Dm.z!=0.){vec2 d=p-Dm.xy;float r=length(d),w=Dm.w,c=exp(-r*r/(w*w)),x=(r-1.35*w)/(.16*w),g=exp(-x*x);" +
       "h+=Dm.z*(.1*g-c);s+=Dm.z*(2.*r/(w*w)*c-.1*2.*x/(.16*w)*g)*d/max(r,.001);" +
-      "float sg=.16*w;cv+=.5*Dm.z*(.1*(g*(4.*x*x-2.)/(sg*sg)-2.*x*g/(sg*max(r,1.)))-c*(4.*r*r/(w*w*w*w)-4./(w*w)));}" +
+      "float sg=.16*w;float dz=.5*Dm.z*(.1*(g*(4.*x*x-2.)/(sg*sg)-2.*x*g/(sg*max(r,1.)))-c*(4.*r*r/(w*w*w*w)-4./(w*w)));cv+=dz;cd+=dz;}" +
       "float m=1.;for(int i=0;i<32;i++){if(i>=nR)break;vec4 b=R[i];vec2 dd=max(max(b.xy-p,p-b.zw),0.);m=min(m,mix(K[i].x,1.,smoothstep(0.,K[i].y,length(dd))));}" +
       // .x: minus the disturbance's Laplacian (the ambient swell left out): positive along each crest, for the slivers
-      "float ox=-cv;if(Cp.z>.5){vec2 sd=s-s0;float c=-cv*inversesqrt(cv*cv+Cp.x*Cp.x*dot(sd,sd)+1e-12),g=max(-cv*Cp.w*m,0.);g=g/(1.+g);" +
-      "ox=pow(g,.7)*pow(max(c,0.),Cp.y);}" +  // dark room: the finished sliver (crest phase vs the disturbance's own slope)
+      "float ox=-cv;if(Cp.z>.5){vec2 sd=s-s0;float vr=.5+.5*sin(dot(p,vec2(.043,.029))+1.7*sin(dot(p,vec2(-.017,.031))));" +
+      "float c=-cd*inversesqrt(cd*cd+Cp.x*Cp.x*dot(sd,sd)+1e-12),g=max(-cd*Cp.w*m-.02,0.);g=g/(1.+g);" +
+      "ox=pow(g,.7)*(.6+.4*vr)*pow(max(c,0.),Cp.y*(.8+.4*vr));}" +  // dark room: the finished sliver (crest phase vs the disturbance's own slope)
       "o=vec4(ox,s,m);}";
     // caustics (after Evan Wallace): a grid refracted onto the floor; each triangle adds old area / new area
     // (the slope is box-filtered over one grid cell first: a wavelength shorter than two cells would alias into dashes)
@@ -277,7 +278,7 @@
         var dir = seed + (a * 0.618034 % 1 - 0.5) * 3.4 + (Math.random() - 0.5) * 0.4;
         AW.push({ kx: Math.cos(dir) * k, ky: Math.sin(dir) * k, amp: (0.0042 + Math.random() * 0.003) / k, w: Math.sqrt(G * km + SR * km * km * km) * ASLOW, ph: Math.random() * 6.283 });
       }
-      var pDone = 0, Fd = new Float32Array(NK * ROWS), Su = new Float32Array(NS * 4), Iu = new Float32Array(SLOTS * 4), Ru = new Float32Array(128), Ku = new Float32Array(128);
+      var pDone = 0, Fd = new Float32Array(NK * ROWS), Su = new Float32Array(NS * 4), Iu = new Float32Array(SLOTS * 4), Qu = new Float32Array(SLOTS * 4), Ru = new Float32Array(128), Ku = new Float32Array(128);
       var W_ = 0, H_ = 0, sw = 0, shh = 0, lost = false, hadRings = true, Q = 0, RS = [0, 0, 0, 0];
       // the surface and its caustics are re-simulated only when something moved them: every frame while rings
       // live, on scroll or a layout change, else at ~30 Hz for the slow ambient swell (simT, simK)
@@ -334,7 +335,7 @@
           var R0 = rings[i], env = Math.min(1, R0.t / 0.05), life = Math.min(R0.life, LR);
           env *= R0.t > life - 0.6 ? Math.max(0, (life - R0.t) / 0.6) : 1;
           if (env <= 0 || !(R0.s > 0) || R0.t >= LR) continue;
-          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; nI++;
+          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = 300 * R0.t + 8; Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.45); nI++;
         }
         for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 3] = 0;
         var nS = trail && trail.n > 1 ? Math.min(NS, trail.n) : 0;
@@ -351,7 +352,7 @@
           }
           gl.bindFramebuffer(gl.FRAMEBUFFER, fW); gl.viewport(0, 0, sw, shh); gl.useProgram(Ps.p);
           bindT(Ps, "P", 0, tP);
-          gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.A, AMB);
+          gl.uniform2f(Ps.u.vp, W_, H_); gl.uniform4fv(Ps.u.I, Iu); gl.uniform4fv(Ps.u.Q, Qu); gl.uniform1f(Ps.u.WV, look.wv != null ? look.wv : WAVELET); gl.uniform4fv(Ps.u.A, AMB);
           gl.uniform4fv(Ps.u.R, Ru); gl.uniform4fv(Ps.u.K, Ku); gl.uniform1i(Ps.u.nR, nR); gl.uniform1i(Ps.u.nS, nS); gl.uniform1f(Ps.u.LA, look.ring * (look.trail || 1)); var cp4 = look.cp || [0, 1, 0, 1], cg4 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Ps.u.Cp, cp4[0], cp4[1], cp4[2] > 0.5 ? 1 : 0, cg4[0]); gl.uniform4f(Ps.u.Dm, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * look.ring * 0.26 * 13 / 0.858 : 0, 13); if (nS) gl.uniform4fv(Ps.u.S, Su);
           gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
           gl.bindFramebuffer(gl.FRAMEBUFFER, fC); gl.viewport(0, 0, sw, shh);
@@ -475,13 +476,13 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [280, 0.85, 0, 5], qcp: [0.12, 10, 1, 0.7], qdmc: 1 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [280, 0.85, 0, 5], qcp: [0.12, 13, 1, 0.7], qdmc: 1, qwv: 0.008 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.65, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.3, qhz: 6, qcg: [200, 0.08, 0.08, 1.5], qcp: [0.12, 8, 0, 0.7], qdmc: 0 };
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.65, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.3, qhz: 6, qcg: [200, 0.08, 0.08, 1.5], qcp: [0.12, 8, 0, 0.7], qdmc: 0, qwv: 0.045 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
@@ -1526,7 +1527,7 @@
       }
       var L = wlook;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
-      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0;
+      L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0; L.wv = pal.qwv;
       var tn = 0, tsy = sy * rpz();
       for (var q = 0; q < trl.length && tn < TRL_N; q++, tn++) {
         var tp = trl[q], ta = trA.a;
