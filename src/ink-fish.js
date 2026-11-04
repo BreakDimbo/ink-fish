@@ -110,10 +110,13 @@
       for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * kp * Math.exp(-kp * kp * SRC * SRC / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
     };
     // a line impulse (the 1-D Cauchy–Poisson problem across the stroke): the same dispersion and decay, with
-    // cos(k·d) for J0(k·r) and without the radial measure k
+    // cos(k·d) for J0(k·r) and without the radial measure k. Its source is broader (SRCL, a finger-width line rather
+    // than a fingertip) so the energy sits near the group-velocity minimum: the wedge arm then lies at
+    // tan α ≈ cg,min/U (≈ 14–15° at 1200 px/s) instead of riding out on the fast capillary fringe
+    var SRCL = 8;
     var specL = function (t, A, out, o) {
       var tp = t;
-      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * Math.exp(-kp * kp * SRC * SRC / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
+      for (var k = 0; k < NK; k++) { var kp = KP[k]; out[o + k] = A * DK * Math.exp(-kp * kp * SRCL * SRCL / 4 - VD[k] * tp) * Math.cos(W[k] * tp); }
     };
     var tableL = function () {
       if (JL) return JL;
@@ -743,8 +746,13 @@
       if (!inside(x, y) || !free(x, py, 6)) { if (trl.length && trl[trl.length - 1].h) trl[trl.length - 1].h = 0; trCut(); P.gap = 1; return; }
       // v1.4: below water's minimum wave speed (23 cm/s ≈ 380 px/s here) a straight stroke radiates almost nothing;
       // above it the stroke sheds a wake whose strength grows with speed (the dimple carries the slow case)
-      var gate = M.max(0, M.min(1, (sp - 280) / 320)); gate = gate * gate * (3 - 2 * gate);
-      var st = 0.6 * gate;
+      // The response stays continuous over the whole range: a soft onset over 280–420 px/s, then sub-linear growth
+      // (≈ √U: the energy shed per length grows with speed, the wedge spreads it wider) with a gentle tanh limit, never a
+      // hard cap (0.47 at 400 px/s, 0.56 at 600, 0.74 at 1200, 0.93 at 2400). The wedge narrows by itself: its arms are
+      // where the visible front (~cg,min) has reached since each point was laid, so tan α ≈ c/U and the crest spacing
+      // across an arm (the dispersed age there) scales with distance/U
+      var gate = M.max(0, M.min(1, (sp - 280) / 140)); gate = gate * gate * (3 - 2 * gate);
+      var st = gate * 1.25 * Math.tanh(0.6 * Math.sqrt(sp / 600) / 1.25);
       P.s = P.s * 0.6 + st * 0.4;
       var H = trl[trl.length - 1];
       if (P.gap || !H || !H.h) { P.gap = 0; trl.push({ x: x, y: py, t: 0, s: P.s }); trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); wake(); return; }
@@ -761,7 +769,8 @@
     var trEnd = function () {
       // lift-off: the meniscus lets go and the dimple springs back, one crisp ring packet
       if (press && performance.now() - press.t0 > 120) addRipple(press.lx, press.ly, 0.7, true);
-      if (press && press.act) { ripLast.x = press.lx; ripLast.y = press.ly; ripLast.t = performance.now(); } // hover rings resume after fresh travel
+      // hover rings resume only after fresh travel and a moment: the hand lifting away doesn't touch the water (no stray ring just after the lift packet)
+      if (press) { ripLast.x = press.lx; ripLast.y = press.ly; ripLast.t = performance.now() + 700; }
       if (press && trl.length && trl[trl.length - 1].h) trl[trl.length - 1].h = 0;
       press = null;
     };
@@ -786,7 +795,7 @@
         var rd = hyp(cx - ripLast.x, cy - ripLast.y), fw = clamp((ptr.sp - 450) / 900, 0, 1);
         if (now - ripLast.t > 700 || ptr.sp < 300) wakeN = 0;
         if (rd > 130 + 190 * fw && now - ripLast.t > 380 - 180 * fw) {
-          var s0 = fw > 0 ? 0.46 * M.pow(0.62, wakeN) : clamp(0.28 + ptr.sp / 3600, 0.28, 0.4);
+          var sSl = clamp(0.28 + ptr.sp / 3600, 0.28, 0.4), s0 = sSl + (0.46 * M.pow(0.62, wakeN) - sSl) * M.min(1, fw * 3); // a continuous blend
           if (addRipple(cx, cy, s0)) { if (fw > 0) wakeN++; ripLast.x = cx; ripLast.y = cy; ripLast.t = now; }
         }
       }
