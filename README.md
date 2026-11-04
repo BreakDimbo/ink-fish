@@ -264,14 +264,18 @@ The real-water methods come from [Ultra Water](https://github.com/Humpalumps/Ult
 
 [MIT](LICENSE) © 2026 BreakDimbo
 
-### v1.3.2 — water, not syrup
-Press-and-drag trails and rings now run in real time with water's viscosity (1 cm ≈ 16.7 CSS px): thin fronts detach from the stroke at ~300 px/s (≈ 17.7 cm/s, water's minimum group speed), thin out as ~1/√r and are gone in ~1.8 s. The idle swell stays slow. The 2D fallback draws the same thin, brisk outward lines. `water: 'real'` API unchanged.
-按住拖动的水纹改为真实时间、真实水的粘度：细而清晰的波前以约 300 px/s 离开笔迹并向外扩散衰减，不再像粘稠液体。
+## Changelog 更新日志
+
+### v1.5.0 — a real wave simulation for the drag wake
+
+Pressing and dragging now pushes on a small simulated water surface instead of drawing pre-computed wavelets. The surface is a grid with one cell every 5 CSS px (10 px on the cheaper quality), stepped 120 times a second (60 on the cheaper quality) with water-like dispersion. Short ripples run ahead of the press. A slow drag, under about 300 px/s, carries only its dent. A fast flick leaves a narrow V whose arms carry fine parallel crests. Only the part of the grid the wake has reached is stepped, and the grid sleeps 2 s after the last press: it fades over the last 0.45 s, then is cleared and stops costing anything. It moves with the page when you scroll and pauses with the tab. In the dark theme the crests catch a restrained sky sheen, so the press and lift rings and both arms of the V read while calm water stays dark. Press and lift rings, the dimple, refraction and caustics are as in v1.4. `water: 'real'` API unchanged. On headless Chrome (software GL) the library costs no more per frame than v1.3.1 in any of the four gate cases, and the 1440px drag frame interval is slightly lower. This release also includes v1.3.2 and v1.4.0 below, which were not released separately.
+
+按住拖动时，水纹改为真实的波动模拟：一张每 5 CSS px 一格的小网格（低画质 10 px），每秒推进 120 步（低画质 60 步），带水一样的色散。短波纹跑在按压点前面；慢速拖动（低于约 300 px/s）只带着凹陷移动；快速划过留下窄 V 形尾迹，两臂上有细密的平行波峰。只计算尾迹已到达的区域，最后一次按压 2 秒后网格休眠（最后 0.45 秒淡出，然后清空，不再消耗）。滚动时随页面移动，标签页隐藏时暂停。深色主题中波峰带一层克制的天光，按下/抬起的波圈和 V 的两臂都清晰可见，静水仍然是暗的。API 不变，每帧开销不高于 v1.3.1。本版同时包含下面未单独发布的 v1.3.2 与 v1.4.0。
 
 ### v1.4.0 — real capillary waves
 Pressing now dents the surface (a small dimple with a bright meniscus rim), and press and lift-off each send out a packet of fine crests around a calm core that grows at ~285 px/s (water's minimum group speed). Slow drags (below ~23 cm/s ≈ 384 px/s) leave no wake, just like a finger in a real dish; fast flicks leave a narrow V with a sharp tip. Hover rings use the same physics. The light theme reads as a shallow floor with fine caustics, and the dark theme is lit by sky reflection. The 2D fallback draws the dimple, packets and V as thin lines. `water: 'real'` API unchanged; per-frame cost matches v1.3.1.
 按下时水面出现小凹陷和明亮的弯月面，按下和抬起都会发出一圈细密波纹包（中心平静区以约 285 px/s 扩张）。慢速拖动（低于约 384 px/s）不留尾迹，和真实手指划水一样；快速划过留下尖端锐利的窄 V 形尾迹。浅色主题像浅水池底的细焦散，深色主题靠天空反光照亮。2D 回退同样近似绘制。API 不变，性能不低于 v1.3.1。
 
-### v1.5.0 (prototype, branch v1.5-gridwake) — a height-field drag wake
-
-The press-and-drag wake is now a real wave simulation instead of a sum of analytic wavelets: a quarter-resolution height field (one cell per 4 CSS px, ~360×225 at 1440×900; 8 px on the cheaper quality), stepped 120 times a second with a small dispersion term, so short ripples run ahead, a slow drag (under ~270 px/s) only carries its dent along, and a fast flick leaves a clean narrow V. The pointer presses a capsule along each step's path, so a quick flick never beads. The field sleeps 2 s after the last press (it fades over the last 0.45 s, then is cleared and stops stepping). Press and lift rings, the dimple, refraction and caustics are unchanged. In the dark theme the crests catch a dim sky glint whose width grows with the roughness the field can't resolve, instead of v1.4's painted slivers. `water: 'real'` API unchanged.
+### v1.3.2 — water, not syrup
+Press-and-drag trails and rings now run in real time with water's viscosity (1 cm ≈ 16.7 CSS px): thin fronts detach from the stroke at ~300 px/s (≈ 17.7 cm/s, water's minimum group speed), thin out as ~1/√r and are gone in ~1.8 s. The idle swell stays slow. The 2D fallback draws the same thin, brisk outward lines. `water: 'real'` API unchanged.
+按住拖动的水纹改为真实时间、真实水的粘度：细而清晰的波前以约 300 px/s 离开笔迹并向外扩散衰减，不再像粘稠液体。
