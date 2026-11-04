@@ -65,7 +65,6 @@ async def main():
                 for build in BUILDS: plan.append((build, w, h, int(cpu), mode))
         for rep in range(0):  # extra interleaved repeats at 1440 4x scroll
             for build in BUILDS: plan.append((build, 1440, 900, 4, "scroll"))
-        import os
         plan = plan[int(os.environ.get('SKIP', '0')):]
         for args in plan:
             try:

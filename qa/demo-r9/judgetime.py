@@ -19,8 +19,8 @@ async def run(b, ver, w, h, cpu):
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--hide-scrollbars"])
-        for (w, h) in [(1440, 900), (390, 844)]:
-            for cpu in (1, 4):
+        for (w, h) in [(1440, 900), (390, 844)] if os.environ.get("SIZES", "1440,390") == "1440,390" else [(int(x), 900 if x == "1440" else 844) for x in os.environ["SIZES"].split(",")]:
+            for cpu in [int(c) for c in os.environ.get("CPUS", "1,4").split(",")]:
                 for rep in range(int(os.environ.get("REPS", "3"))):
                     for ver in BUILDS:
                         r = await asyncio.wait_for(run(b, ver, w, h, cpu), 90)
