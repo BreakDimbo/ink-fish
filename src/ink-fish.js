@@ -756,7 +756,8 @@
         } else if (d < 6) return;
         P.act = true; trCut();
         if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.55; // a press that becomes a stroke: a softer splash, the line carries it
-        P.s = 0; trl.push(P.first = { x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
+        P.s = 1e-3; trl.push(P.first = { // ~0, not 0: s = 0 marks a separator, and the stroke must still grow from here
+           x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
         trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); // the head follows the pointer until it is committed
         wake(); return;
       }

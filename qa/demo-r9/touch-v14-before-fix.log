@@ -1,0 +1,2 @@
+FAIL touch (pan-y): touch-action=auto/pan-y; vertical swipe: trail 0, scrollY 335; horizontal: trail 6, scrollY 0; hold+drag: trail 0 errors=[]
+done
