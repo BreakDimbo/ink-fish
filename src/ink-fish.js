@@ -92,6 +92,10 @@
     // NTR rows for a point source over ages 0…LR, NTL rows for a line source over 0…LS (≈10 ms per row, so a
     // front moving ~90 px/s shifts ≤ 1 px between rows and stays crisp under linear filtering)
     var NTR = 192, NTL = 192, LR = 2.0, LS = 1.8, NS = 64, ROWS = NTR + NTL, NORMT = 0.12;
+    // v1.5.3 · at the koi scale a hover/lift ring spreads ~3.4x slower, so the same energy stays ~1.8x steeper
+    // (measured, 0.3-0.8 s old). RING_G keeps it as faint as v1.5.2's (~6 at 0.3 s on the r15 meter) and under
+    // the click ring (~0.8x at 0.3 s, ~0.45x by 0.8 s): the tap stays the one clear ring.
+    var RING_G = 0.25;
     var DK = 4.2 / 4.5 / NK, KP = new Float32Array(NK), W = new Float32Array(NK), VD = new Float32Array(NK);
     // The k grid (to 0.93 px⁻¹, λ ≥ 6.7 px: finer than the half-res sim resolves) is uniform, so a profile is periodic
     // and mirrored in r with period P = 2π/DK ≈ 1290 px: a packet past P/2 would fold back in as faint fine rings
@@ -358,7 +362,7 @@ function create(D) {
         }
         return pT;
       };
-      var gc = 4, gx = 1, gy = 1, gi = 0, gLive = false, gLast = -9, gAcc = 0, gT = NaN, gSy = 0, gPr = 0, gPx = 0, gPy = 0, gHas = false, gOn = 1;
+      var gc = 4, gx = 1, gy = 1, gi = 0, gLive = false, gLast = -9, gAcc = 0, gT = NaN, gSy = 0, gPr = 0, gPx = 0, gPy = 0, gHas = false, gOn = 1, gU = 0, gUx = 0, gUy = 0;
       // the part of the field that can be non-zero (cells, grown by one cell a step, about the fastest group speed),
       // so a fresh wake steps only where it is; it only ever grows until the field sleeps
       var bx0 = 0, by0 = 0, bx1 = 0, by1 = 0, gBox = false;
@@ -423,12 +427,17 @@ function create(D) {
         var dsy = sy - gSy; gSy = sy;
         var on = !!(trail && trail.d && trail.d[2] > 0), px = on ? trail.d[0] : gPx, py = on ? trail.d[1] : gPy;
         if (on && gPr === 0) { // a fresh press starts here, not at the last one: where the stroke began, ramped as if pressed since then
-          gPx = trail.d[3]; gPy = trail.d[4]; gPr = Math.max(0, Math.min(1, (trail.d[5] - dt) / 0.12)); gOn = 0;
+          gPx = trail.d[3]; gPy = trail.d[4]; gPr = Math.max(0, Math.min(1, (trail.d[5] - dt) / 0.12)); gOn = 0; gUx = gPx; gUy = gPy; gU = 0;
         }
         gPr = on ? Math.min(1, gPr + dt / 0.12) : Math.max(0, gPr - dt / 0.12);
         // v1.5.2: a fresh stroke's pressure comes on over GRID_ON s (eased), not at once, so a slow start no longer rings
         // out as a second, larger splash beside the press's own (promo) ring. Distance counts too (full after GRID_OND px):
         // a flick spreads its onset along its path, rings out nothing, and keeps v1.5.1's V. Once on, the wake is v1.5.1's
+        // v1.5.3 · at the koi scale a slow stroke (~200 px/s ≈ 50 cm/s) is near the waves' own speed, so the same
+        // pressure piles up ~1.7x the v1.5.2 wake, and a flick (≥ 800 px/s) ~0.65x: weight the pressure by the
+        // stroke's speed (0.35 → 1.6): a flick reads as in v1.5.2, a slow drag leaves a faint V (real: it is now faster than c_min)
+        var dU = on && gPr > 0 && dt > 0 ? Math.hypot(px - gUx, py - gUy) / dt : 0; gUx = px; gUy = py; gU += (dU - gU) * Math.min(1, dt / 0.08);
+        var uS = Math.max(0, Math.min(1, (gU - 200) / 600)), gSp = 0.35 + 1.25 * uS * uS * (3 - 2 * uS);
         gOn = Math.min(1, gOn + dt / GRID_ON + (on ? Math.hypot(px - gPx, py - gPy) / GRID_OND : 0)); var gE = gOn * gOn * (3 - 2 * gOn);
         if (gPr > 0) { gLast = T; if (!gLive) { gClear(); gLive = true; gAcc = 0; } }
         if (!gLive) return 0;
@@ -448,7 +457,7 @@ function create(D) {
           var u = (i + 1) / n, bx = gPx + (px - gPx) * u, by = gPy + (py - gPy) * u;
           var len = Math.hypot(bx - ax, by - ay) / gc, R = GRID.R * (Q ? 0.75 : 1);
           // each point under the capsule feels the pressure for the share of the step the disk covers it
-          var amp = gPr * gE * GRID_P * (2 * R) / (2 * R + len) * (Q ? 2 : 1);
+          var amp = gPr * gE * gSp * GRID_P * (2 * R) / (2 * R + len) * (Q ? 2 : 1);
           if (gPr > 0) {
             var sx0 = Math.floor(Math.min(ax, bx) / gc - R - 2), sx1 = Math.ceil(Math.max(ax, bx) / gc + R + 2), sy0 = Math.floor(Math.min(ay, by) / gc - R - 2), sy1 = Math.ceil(Math.max(ay, by) / gc + R + 2);
             if (gBox) { bx0 = Math.min(bx0, sx0); by0 = Math.min(by0, sy0); bx1 = Math.max(bx1, sx1); by1 = Math.max(by1, sy1); } else { bx0 = sx0; by0 = sy0; bx1 = sx1; by1 = sy1; gBox = true; }
@@ -488,7 +497,7 @@ function create(D) {
           var R0 = rings[i], env = Math.min(1, R0.t / 0.05), life = Math.min(R0.life, LR);
           env *= R0.t > life - 0.6 ? Math.max(0, (life - R0.t) / 0.6) : 1;
           if (env <= 0 || !(R0.s > 0) || R0.t >= LR) continue;
-          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = front(R0.t); Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.6); nI++;
+          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env * RING_G; Qu[nI * 4] = front(R0.t); Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.6); nI++;
         }
         for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 3] = 0;
         var nS = 0, gk = gridStep(trail, T, sy, look);
