@@ -1,4 +1,5 @@
-# r14: the promo capture script (inkfish-promo/scripts/cap.py) with the output dir and host made configurable; nothing else changed
+# r14: the promo capture script (inkfish-promo/scripts/cap.py) with the output dir and host made configurable, and (r14 dev
+# loop only, off by default) SAVE="i,j,..." to screenshot just those frames; nothing else changed
 # deterministic frame-by-frame capture (virtual clock + seeded Math.random), after ink-fish/qa/demo-r7/cap.py
 import asyncio, sys, os, math, subprocess, shutil, json, importlib.util, time
 from playwright.async_api import async_playwright
@@ -8,6 +9,7 @@ name = sys.argv[1]; shot = dict(S.SHOTS[name]); shot["url"] = shot["url"].replac
 FPS = shot.get("fps", 30); N = int(shot["dur"] * FPS); vw, vh = shot["vp"]; dsf = shot.get("dsf", 2)
 N = int(os.environ.get("NMAX", N))
 OUT = os.environ["OUTDIR"] + "/" + name
+SAVE = set(int(v) for v in os.environ["SAVE"].split(",")) if os.environ.get("SAVE") else None
 INIT = """(()=>{let t=1000;const q=[];let id=0;
 performance.now=()=>t;
 window.requestAnimationFrame=cb=>{q.push([++id,cb]);return id};
@@ -54,9 +56,9 @@ async def main():
             for ev in shot.get("events", []):
                 if ev[0] == i: await pg.evaluate(ev[1])
             await pg.evaluate(f"__step(1000/{FPS})")
-            await pg.screenshot(path=f"{OUT}/f{i:04d}.png", timeout=300000)
+            if SAVE is None or i in SAVE: await pg.screenshot(path=f"{OUT}/f{i:04d}.png", timeout=300000)
             if i == 4: print(name, "s/frame", round((time.time() - t0) / 5, 2), flush=True)
         print(name, "errors:", (errs + await pg.evaluate("__errs"))[:8], "time", round(time.time() - t0))
         await b.close()
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", f"{OUT}/f%04d.png", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "12", "-preset", "slow", "-tune", "grain", os.environ["OUTDIR"] + f"/{name}.mp4"], check=True)
+    if SAVE is None: subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", f"{OUT}/f%04d.png", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "12", "-preset", "slow", "-tune", "grain", os.environ["OUTDIR"] + f"/{name}.mp4"], check=True)
 asyncio.run(main())

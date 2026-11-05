@@ -266,6 +266,12 @@ The real-water methods come from [Ultra Water](https://github.com/Humpalumps/Ult
 
 ## Changelog 更新日志
 
+### v1.5.2 — the first ripple is the one from the film
+
+Every press now opens with the ripple from the promo film (v1.3.1's real water): one slow, soft ring that refracts the floor and moves the caustics as it spreads, then fades over 5 s. This applies to a click, a tap, a press-and-hold and the start of a drag. When a press turns into a drag, its ring keeps spreading at about half strength (as in the film) and there is no longer a swap to v1.5.0's larger press packet after 0.25 s. A fresh stroke's wake also comes on over 0.6 s instead of at once, so it no longer rings out as a second splash beside the first one. Once the stroke is moving, the trailing wake, dimple and V are the same as in v1.5.1. Lift-off, hover and idle water are also unchanged, and the 2D fallback still draws v1.5.1's hairline. `water: 'real'` API unchanged.
+
+每次按下的第一道水波恢复为宣传片（v1.3.1 真实水面）里的效果：一圈缓慢柔和的波纹，扩散时折射池底、带动焦散，5 秒内淡出。点击、轻点、按住和拖动开始都是如此。按下转为拖动时，这圈波纹以约一半强度继续扩散（与宣传片一致），不再在 0.25 秒后切换为 v1.5.0 的大按压波包。新一笔的尾迹在 0.6 秒内逐渐出现，而不是瞬间出现，因此不会在第一圈旁边再激起一圈水花。拖动起来之后，尾迹、凹陷和 V 形与 v1.5.1 相同；抬起、悬停和静止水面不变，2D 回退仍是 v1.5.1 的细线。API 不变。
+
 ### v1.5.1 — clicks go back to the original hairline rings
 
 A click or tap (press and release with no meaningful drag) again draws the restrained v1.2.1 hairline ring: a slow train of three shade+light fronts that grow and fade over about 3.6 s, with a soft bend on any fish a ring crosses. The v1.5.0 press ring, release ring, dimple and stationary grid stamp stay off for a click. Once the pointer moves past the existing drag threshold (6 px mouse; 8 px plus a hold or sideways start on touch), the drag wake, dimple and V are the same as in v1.5.0. A still press-and-hold is treated as a click. `water: 'real'` API unchanged; on headless Chrome the library costs no more per frame than v1.5.0 in any of the four gate cases.

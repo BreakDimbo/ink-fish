@@ -1,4 +1,4 @@
-/*! ink-fish v1.5.1 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
+/*! ink-fish v1.5.2 — brush-ink fish swimming behind your page. MIT © 2026 BreakDimbo
     https://github.com/BreakDimbo/ink-fish
 
    One Canvas 2D (DPR <= 1.5) and one rAF loop per instance, paused when the tab is hidden, the host is
@@ -151,6 +151,32 @@
       NORM = 1 / mx;
       return JT;
     };
+    // v1.5.2 · the click ring of v1.3.1, as filmed for the promo: a slow-motion (0.22×) Cauchy–Poisson ring in a
+    // pond's surface film (6× viscosity), from one fingertip-wide source, 5 s long. Its own k grid, kernel table and
+    // per-frame profile rows (one per live ring, as v1.3.1 drew them), and its own surface, caustic and composite
+    // weights (look.p*), so the stroke's wake and everything else keep v1.5.1's water exactly
+    var PR_SLOW = 0.22, PR_NU = 6e-6, PR_SRC = 7, PR_NR = 512, PR_RMAX = 640, PR_SLOTS = 8, PR_LIFE = 5;
+    var PR_DK = 4.2 / PR_SRC / NK, PKP = new Float32Array(NK), PW = new Float32Array(NK), PVD = new Float32Array(NK);
+    for (var pi = 0; pi < NK; pi++) { var pkp = (pi + 0.5) * PR_DK, pkm = pkp / S; PKP[pi] = pkp; PW[pi] = Math.sqrt(G * pkm + SR * pkm * pkm * pkm); PVD[pi] = 2 * PR_NU * pkm * pkm; }
+    var PJT = null, PNORM = 1;
+    var specP = function (t, A, out, o) {
+      var tp = t * PR_SLOW;
+      for (var k = 0; k < NK; k++) { var kp = PKP[k]; out[o + k] = A * PR_DK * kp * Math.exp(-kp * kp * PR_SRC * PR_SRC / 4 - PVD[k] * tp) * Math.cos(PW[k] * tp); }
+    };
+    var tableP = function () { // built on the first click (≈ 100k Bessel values)
+      if (PJT) return PJT;
+      PJT = new Float32Array(PR_NR * NK * 2);
+      for (var k = 0; k < NK; k++) for (var r = 0; r < PR_NR; r++) {
+        var x = PKP[k] * r * PR_RMAX / (PR_NR - 1);
+        PJT[(k * PR_NR + r) * 2] = j0(x); PJT[(k * PR_NR + r) * 2 + 1] = -PKP[k] * j1(x);
+      }
+      var F = new Float32Array(NK), mx = 0; specP(0.5, 1, F, 0); // a unit ring has its steepest slope = 1 at t = 0.5 s
+      for (var q = 0; q < PR_NR; q++) { var s = 0; for (var kk = 0; kk < NK; kk++) s += F[kk] * PJT[(kk * PR_NR + q) * 2 + 1]; if (Math.abs(s) > mx) mx = Math.abs(s); }
+      PNORM = 1 / mx;
+      return PJT;
+    };
+    // how far out a promo ring can still tilt the floor light (CSS px, from its profile: < 0.01 px of caustic shift beyond)
+    var PR_REACH = function (t) { return Math.min(PR_RMAX, 300 + 60 * t); };
     var HEAD = "#version 300 es\nprecision highp float;precision highp sampler2D;\n";
     var VS_FULL = HEAD + "in vec2 a;out vec2 v;void main(){v=a*.5+.5;gl_Position=vec4(a,0.,1.);}";
     // per ring: η(r) and dη/dr summed over wavenumber
@@ -178,6 +204,12 @@
       // also reads its square as the slope variance this half-res pixel cannot resolve (Kaplanyan-style roughness)
       "float ox=-cv;" +
       "o=vec4(ox,s,m);}";
+    // v1.5.2 · the promo rings alone: their slope (in .yz, where the caustic pass reads it), as v1.3.1's ring loop
+    var FS_SIMP = HEAD + "uniform sampler2D P;uniform vec2 vp;uniform vec4 I[" + PR_SLOTS + "];in vec2 v;out vec4 o;" +
+      "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec2 s=vec2(0.);" +
+      "for(int i=0;i<" + PR_SLOTS + ";i++){vec4 q=I[i];if(q.z<=0.)continue;vec2 d=p-q.xy;float r=length(d);if(r>=" + PR_RMAX.toFixed(1) + ")continue;" +
+      "vec2 e=texture(P,vec2(r*" + ((PR_NR - 1) / PR_NR / PR_RMAX).toFixed(9) + "+" + (0.5 / PR_NR).toFixed(9) + ",(float(i)+.5)/" + PR_SLOTS.toFixed(1) + ")).rg;s+=e.y*d/max(r,.001);}" +
+      "o=vec4(0.,s,0.);}";
     // v1.5 · the drag wake: a height field (h, v) stepped at a fixed rate on a coarse grid. Each step
     //   v += c²∇²h − β∇⁴h − κh + μ∇²v − pressure;  v *= damping;  h += v
     // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min = √(c² + 2√(κβ)) ≈ 0.5 cell/step ≈ 300 px/s at 5 px cells, at λ ≈ 6 cells ≈ 30 px), a pressure moving slower than it
@@ -185,7 +217,7 @@
     // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
     // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
-    var GRID_P = 0.02, GRID_GAIN = 150;
+    var GRID_P = 0.02, GRID_GAIN = 150, GRID_ON = 0.6;
     var GRID = { c2: 0.19, b: 0.03, k: 0.03, mu: 0.006, damp: 0.991, R: 2.0, rate: 120, life: 2.0, fade: 0.45 };
     // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 3.47, must stay under 2(1 + a) with a the
     // per-step velocity retention (damping × viscosity × sponge, ≥ 0.77 at the border): 3.55
@@ -222,17 +254,21 @@
     // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
     // dither of ±½ step keeps the smooth light from banding in 8 bits.
     // Output is premultiplied "multiply the paper by (1−a), then add rgb", so the page shows through.
-    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc;uniform vec2 ld;in vec2 v;out vec4 o;" +
+    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc,k5,k6;uniform sampler2D W2,B2;uniform vec2 ld;in vec2 v;out vec4 o;" +
       "float inb(vec2 u){return step(0.,min(min(u.x,u.y),1.-max(u.x,u.y)));}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec4 w=texture(Wt,v);vec2 s=w.yz;float m=w.w;" +
-      "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
+      // v1.5.2: a click's ring (k6.z on) refracts, lights the floor and reflects with v1.3.1's weights, on its own slope s2
+      "vec2 s2=vec2(0.);float c2=1.;if(k6.z>.5){s2=texture(W2,v).yz;c2=texture(B2,v).r;}" +
+      "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;if(k6.z>.5){uf=(p+k1.x*s+k5.x*s2)/vp;us=(p+k1.y*s+k5.y*s2)*ss;}vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
       // the light comes in at a slant: the floor pattern sits a few px below-right of the surface that casts it
       "float c=texture(B,v-vec2(5.,-7.)/vp).r;" +
-      "float L=1.+(c-1.)*k1.z*m,e=(1.-sh)*L;" +
+      "float L=1.+(c-1.)*k1.z*m;if(k6.z>.5)L+=(c2-1.)*k5.z*m;float e=(1.-sh)*L;" +
       "float mul=min(e,1.);vec3 add=lit*max(e-1.,0.)+ins*sh*k2.y;" +
       "add=add*(1.-f.a)+f.rgb*tr+ins*f.a*k2.x;mul*=1.-f.a;" +
       "vec3 n=normalize(vec3(-s,1.));float F=.02+.98*pow(1.-n.z,5.);vec2 r=2.*n.z*n.xy;" +
       "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.1)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
+      "if(k6.z>.5){vec3 n2=normalize(vec3(-s2,1.));float F2=.02+.98*pow(1.-n2.z,5.);vec2 r2=2.*n2.z*n2.xy;" +
+      "float q2=(F2*(1.+k6.y*dot(r2,ld))-.02)*k5.w*m,h2=min(k6.x*dot(s2,s2),.1)*m;add+=sky*(max(q2,0.)+h2);mul*=(1.+min(q2,0.))*(1.-h2);}" +
       // v1.4: each crest as a thin sliver of the brighter sky on its lit face (and a faint shade on the far face),
       // tone-mapped so the fine capillary front reads as well as the coarse crests behind it
       "if(k4.z<.5&&w.x!=0.){float g=w.x*k3.x*m;g=g/(1.+abs(g));float sl=pow(max(g,0.),k3.w);" +
@@ -264,8 +300,8 @@
         for (var i = 0; i < n; i++) { var nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, ""); u[nm] = gl.getUniformLocation(p, nm); }
         return { p: p, u: u };
       };
-      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT);
-      if (!Pp || !Ps || !Pc || !Pb || !Po || !Pg || !Pgs) return null;
+      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT), Psp = prog(VS_FULL, FS_SIMP);
+      if (!Pp || !Ps || !Pc || !Pb || !Po || !Pg || !Pgs || !Psp) return null;
       var tex = function (fmt, w, h, filt, type, data, f2) {
         var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
@@ -285,7 +321,24 @@
       // the drag-wake height field: two RG16F textures ping-ponged (h, v), cells of gc CSS px
       var tG = [tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG), tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG)], fG = [fbo(tG[0]), fbo(tG[1])];
       if (!fP || !fW || !fC || !fB || !fG[0] || !fG[1]) return null;
-      var gc = 4, gx = 1, gy = 1, gi = 0, gLive = false, gLast = -9, gAcc = 0, gT = NaN, gSy = 0, gPr = 0, gPx = 0, gPy = 0, gHas = false;
+      // v1.5.2 · the promo rings' kernel table, profile rows, surface, caustic and its penumbra: made on the first click
+      var pT = null, pF = new Float32Array(NK * PR_SLOTS), pI = new Float32Array(PR_SLOTS * 4), pW = 0, pH = 0;
+      var promoTex = function () {
+        if (!pT) {
+          pT = { J: tex(gl.RG32F, PR_NR, NK, gl.NEAREST, gl.FLOAT, tableP(), gl.RG), F: tex(gl.R32F, NK, PR_SLOTS, gl.NEAREST, gl.FLOAT, null, gl.RED),
+            P: tex(gl.RGBA16F, PR_NR, PR_SLOTS, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA), W: tex(gl.RGBA16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RGBA),
+            C: tex(gl.R16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RED), B: tex(gl.R16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RED) };
+          pT.fP = fbo(pT.P); pT.fW = fbo(pT.W); pT.fC = fbo(pT.C); pT.fB = fbo(pT.B);
+          if (!pT.fP || !pT.fW || !pT.fC || !pT.fB) { pT.bad = true; return pT; }
+        }
+        if (pW !== sw || pH !== shh) {
+          pW = sw; pH = shh;
+          gl.bindTexture(gl.TEXTURE_2D, pT.W); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, shh, 0, gl.RGBA, gl.HALF_FLOAT, null);
+          [pT.C, pT.B].forEach(function (t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, sw, shh, 0, gl.RED, gl.HALF_FLOAT, null); });
+        }
+        return pT;
+      };
+      var gc = 4, gx = 1, gy = 1, gi = 0, gLive = false, gLast = -9, gAcc = 0, gT = NaN, gSy = 0, gPr = 0, gPx = 0, gPy = 0, gHas = false, gOn = 1;
       // the part of the field that can be non-zero (cells, grown by one cell a step, about the fastest group speed),
       // so a fresh wake steps only where it is; it only ever grows until the field sleeps
       var bx0 = 0, by0 = 0, bx1 = 0, by1 = 0, gBox = false;
@@ -329,11 +382,11 @@
         var V = new Float32Array(nx * ny * 2), Ix = new Uint32Array((nx - 1) * (ny - 1) * 6), n = 0;
         for (var y = 0; y < ny; y++) for (var x = 0; x < nx; x++) { V[(y * nx + x) * 2] = x / (nx - 1); V[(y * nx + x) * 2 + 1] = y / (ny - 1); }
         for (var yy = 0; yy < ny - 1; yy++) for (var xx = 0; xx < nx - 1; xx++) { var i0 = yy * nx + xx; Ix[n++] = i0; Ix[n++] = i0 + 1; Ix[n++] = i0 + nx; Ix[n++] = i0 + 1; Ix[n++] = i0 + nx + 1; Ix[n++] = i0 + nx; }
-        gN = n; gV = nx * ny; simK = NaN;
+        gN = n; gV = nx * ny; gNX = nx; gNY = ny; simK = NaN;
         gl.bindVertexArray(vaoG); gl.bindBuffer(gl.ARRAY_BUFFER, gB); gl.bufferData(gl.ARRAY_BUFFER, V, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gI); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Ix, gl.STATIC_DRAW); gl.bindVertexArray(null);
       };
-      var gV = 0, grid = 6;
+      var gV = 0, grid = 6, gNX = 1, gNY = 1;
       var upload = function (t, src, wh) {
         gl.bindTexture(gl.TEXTURE_2D, t);
         if (wh[0] !== src.width || wh[1] !== src.height) { wh[0] = src.width; wh[1] = src.height; gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
@@ -350,9 +403,12 @@
         var dsy = sy - gSy; gSy = sy;
         var on = !!(trail && trail.d && trail.d[2] > 0), px = on ? trail.d[0] : gPx, py = on ? trail.d[1] : gPy;
         if (on && gPr === 0) { // a fresh press starts here, not at the last one: where the stroke began, ramped as if pressed since then
-          gPx = trail.d[3]; gPy = trail.d[4]; gPr = Math.max(0, Math.min(1, (trail.d[5] - dt) / 0.12));
+          gPx = trail.d[3]; gPy = trail.d[4]; gPr = Math.max(0, Math.min(1, (trail.d[5] - dt) / 0.12)); gOn = 0;
         }
         gPr = on ? Math.min(1, gPr + dt / 0.12) : Math.max(0, gPr - dt / 0.12);
+        // v1.5.2: a fresh stroke's pressure comes on over GRID_ON s (eased), not at once, so its onset no longer rings out as
+        // a second, larger splash beside the press's own (promo) ring; once on, the wake is v1.5.1's
+        gOn = Math.min(1, gOn + dt / GRID_ON); var gE = gOn * gOn * (3 - 2 * gOn);
         if (gPr > 0) { gLast = T; if (!gLive) { gClear(); gLive = true; gAcc = 0; } }
         if (!gLive) return 0;
         if (T - gLast > GRID.life) { gLive = false; gClear(); return 0; }
@@ -371,7 +427,7 @@
           var u = (i + 1) / n, bx = gPx + (px - gPx) * u, by = gPy + (py - gPy) * u;
           var len = Math.hypot(bx - ax, by - ay) / gc, R = GRID.R * (Q ? 0.75 : 1);
           // each point under the capsule feels the pressure for the share of the step the disk covers it
-          var amp = gPr * GRID_P * (2 * R) / (2 * R + len) * (Q ? 2 : 1);
+          var amp = gPr * gE * GRID_P * (2 * R) / (2 * R + len) * (Q ? 2 : 1);
           if (gPr > 0) {
             var sx0 = Math.floor(Math.min(ax, bx) / gc - R - 2), sx1 = Math.ceil(Math.max(ax, bx) / gc + R + 2), sy0 = Math.floor(Math.min(ay, by) / gc - R - 2), sy1 = Math.ceil(Math.max(ay, by) / gc + R + 2);
             if (gBox) { bx0 = Math.min(bx0, sx0); by0 = Math.min(by0, sy0); bx1 = Math.max(bx1, sx1); by1 = Math.max(by1, sy1); } else { bx0 = sx0; by0 = sy0; bx1 = sx1; by1 = sy1; gBox = true; }
@@ -387,7 +443,7 @@
         work.grid = area;
         return 1 - Math.max(0, Math.min(1, (T - gLast - (GRID.life - GRID.fade)) / GRID.fade));
       };
-      var draw = function (fishC, shC, SHs, rings, rects, T, sy, look, trail) {
+      var draw = function (fishC, shC, SHs, rings, rects, T, sy, look, trail, prings) {
         if (lost) return;
         gl.disable(gl.BLEND);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -444,6 +500,8 @@
           work.sim = sw * shh * 2; work.cau = gV;
         }
         hadRings = nI > 0 || gk > 0;
+        // 3b · v1.5.2: the promo rings (a click's ring), every frame while one lives, inside the box they can reach
+        var nP = promo(prings, look);
         // 4 · composite
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, c.width, c.height); gl.useProgram(Po.p);
         bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
@@ -451,9 +509,59 @@
         gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
         gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]); var k4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Po.u.k4, k4[0], k4[1], k4[2], k4[3]);
         gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
+        gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, nP ? 1 : 0, 0);
+        bindT(Po, "W2", 4, nP ? pT.W : tW); bindT(Po, "B2", 5, nP ? pT.B : tB);
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
         work.comp = c.width * c.height;
+      };
+      var promo = function (prings, look) {
+        if (!prings || !prings.length) return 0;
+        var nP = 0, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (var i = prings.length - 1; i >= 0 && nP < PR_SLOTS; i--) { // newest first: a burst of clicks never loses the fresh one
+          var R0 = prings[i], env = Math.min(1, R0.t / 0.5), life = R0.life || PR_LIFE;
+          env *= env * (3 - 2 * env) * (R0.t > life - 1.4 ? Math.max(0, (life - R0.t) / 1.4) : 1); // v1.3.1's envelope
+          if (env <= 0 || !(R0.s > 0)) continue;
+          if (!nP && (!promoTex() || pT.bad)) return 0;
+          specP(R0.t, PNORM * R0.s * look.pring * env, pF, nP * NK);
+          pI[nP * 4] = R0.x; pI[nP * 4 + 1] = R0.y; pI[nP * 4 + 2] = 1; nP++;
+          var rr = PR_REACH(R0.t) + 24;
+          x0 = Math.min(x0, R0.x - rr); x1 = Math.max(x1, R0.x + rr); y0 = Math.min(y0, R0.y - rr); y1 = Math.max(y1, R0.y + rr);
+        }
+        if (!nP) return 0;
+        for (var z = nP; z < PR_SLOTS; z++) pI[z * 4 + 2] = 0;
+        x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(W_, x1); y1 = Math.min(H_, y1);
+        if (x1 <= x0 || y1 <= y0) return 0;
+        gl.bindTexture(gl.TEXTURE_2D, pT.F); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NK, nP, gl.RED, gl.FLOAT, pF);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fP); gl.viewport(0, 0, PR_NR, nP); gl.useProgram(Pp.p);
+        bindT(Pp, "J", 0, pT.J); bindT(Pp, "F", 1, pT.F);
+        gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // the box in half-res texels (row 0 is the bottom of the page)
+        var sx0 = Math.floor(x0 / W_ * sw), sx1 = Math.ceil(x1 / W_ * sw), sy0 = Math.floor((H_ - y1) / H_ * shh), sy1 = Math.ceil((H_ - y0) / H_ * shh);
+        var bw = sx1 - sx0, bh = sy1 - sy0;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fW); gl.viewport(0, 0, sw, shh); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.enable(gl.SCISSOR_TEST); gl.scissor(sx0, sy0, bw, bh);
+        gl.useProgram(Psp.p); bindT(Psp, "P", 0, pT.P); gl.uniform2f(Psp.u.vp, W_, H_); gl.uniform4fv(Psp.u.I, pI);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // caustics: floor light 1 outside the box; inside, the caustic grid's rows that cover it (and two more each side)
+        gl.disable(gl.SCISSOR_TEST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fC); gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.enable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+        var E = 0.04, a0 = (1 + E - y1 / H_) / (1 + 2 * E), a1 = (1 + E - y0 / H_) / (1 + 2 * E);
+        var r0 = Math.max(0, Math.floor(a0 * (gNY - 1)) - 2), r1 = Math.min(gNY - 2, Math.ceil(a1 * (gNY - 1)) + 2);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+        gl.useProgram(Pc.p); bindT(Pc, "Wt", 0, pT.W);
+        gl.uniform2f(Pc.u.ws, sw, shh); gl.uniform2f(Pc.u.vp, W_, H_); gl.uniform1f(Pc.u.D, look.pcd); gl.uniform1f(Pc.u.E, E); gl.uniform2f(Pc.u.G, grid * 0.5 / W_, grid * 0.5 / H_);
+        gl.uniform1f(Pc.u.px, (W_ / sw) * (H_ / shh));
+        gl.bindVertexArray(vaoG); if (r1 >= r0) gl.drawElements(gl.TRIANGLES, (r1 - r0 + 1) * (gNX - 1) * 6, gl.UNSIGNED_INT, r0 * (gNX - 1) * 6 * 4);
+        gl.disable(gl.BLEND); gl.disable(gl.SCISSOR_TEST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fB); gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.enable(gl.SCISSOR_TEST); gl.useProgram(Pb.p);
+        bindT(Pb, "C", 0, pT.C); var cr = Math.max(look.pcb, grid); gl.uniform2f(Pb.u.cb, cr / W_, cr / H_);
+        gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.disable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 0);
+        work.prof += PR_NR * nP; work.sim += bw * bh * 3; work.cau += (r1 - r0 + 2) * gNX;
+        return nP;
       };
       var api = {
         canvas: c, resize: resize, draw: draw, work: work,
@@ -466,7 +574,9 @@
     }
     // the radius of a ring's steepest crest (CSS px) at t seconds, for the fish it nudges
     var front = function (t) { return 6 + 400 * t; };
-    return { create: create, front: front, life: LR, trailLife: LS, trailN: NS };
+    // the same for a promo ring (v1.3.1's slow front)
+    var pfront = function (t) { return 14 + 68 * t; };
+    return { create: create, front: front, life: LR, trailLife: LS, trailN: NS, pfront: pfront, plife: PR_LIFE };
   })();
 
   var instances = [];
@@ -551,13 +661,16 @@
             // real water: caustic light, in-scatter, sky, fish transmittance; depths (px of shift per unit slope),
             // caustic contrast, Fresnel gain, in-scatter on fish / shadow, sky gradient, ring and swell slopes
             qlit: [pp[0] * 0.5 + 0.1, pp[1] * 0.5 + 0.095, pp[2] * 0.5 + 0.08], qins: [0.07, 0.1, 0.115], qsky: [0.55, 0.64, 0.74], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0.24, 2.3], qcp: [0.10, 0.025, 1, 4], qgg: 2.5, qdmc: 1, qwv: 0.02 }
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.2, qfr: 1.8, qfi: 0.2, qsi: 0.5, qsg: 6, qring: 0.15, qamb: 1.1, qhz: 4, qcg: [260, 0.85, 0.24, 2.3], qcp: [0.10, 0.025, 1, 4], qgg: 2.5, qdmc: 1, qwv: 0.02,
+            // v1.5.2 · a click's ring with v1.3.1's dark look (the promo): depths, caustic depth / blur / contrast, Fresnel, sky gradient, slope, haze
+            pfd: 22, psd: 40, pcd: 40, pcb: 5, pcs: 0.3, pfr: 2.3, psg: 4, pring: 0.14, phz: 9 }
         : { ink: [ink[0] + 8, ink[1] + 4, ink[2]], a: 1 * op, sh: [52, 38, 22], sa: 0.13 * sh,
             rs: [38, 48, 60], rsa: 0.15 * op, rh: [255, 255, 252], rha: 0.5 * op,
             cin: [178, 62, 38], cid: [132, 40, 24], och: [178, 130, 62], ocd: [140, 92, 34], sumi: [28, 26, 24], pa: 0.7 * op,
             wh: [255, 253, 247], wb: 0.24, wl: 0.55, wn: 1, pc: 0.68, ob: 1, sp: 0.12, fn: 1, gr: 0.16, eye: [24, 22, 20],
             qlit: [pp[0] * 0.9, pp[1] * 0.9, pp[2] * 0.9], qins: [0.34, 0.42, 0.45], qsky: [0.9, 0.93, 0.95], qtr: [0.86, 0.95, 0.97],
-            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.65, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.3, qhz: 6, qcg: [200, 0.08, 0.08, 1.5], qcp: [0.12, 8, 0, 0.7], qrv: 0, qdmc: 0, qwv: 0.045 };
+            qfd: 12, qsd: 22, qcd: 20, qcb: 3, qcs: 0.65, qfr: 2.2, qfi: 0.1, qsi: 0.35, qsg: 4, qring: 0.24, qamb: 0.3, qhz: 6, qcg: [200, 0.08, 0.08, 1.5], qcp: [0.12, 8, 0, 0.7], qrv: 0, qdmc: 0, qwv: 0.045,
+            pfd: 22, psd: 40, pcd: 40, pcb: 5, pcs: 0.14, pfr: 1.3, psg: 4, pring: 0.11, phz: 6 };
     };
     var mixPal = function (a, b, k) {
       var o = {};
@@ -809,17 +922,25 @@
     var rip = [], ripLast = { x: -1e5, y: -1e5, t: -1e5 }, RIP_LIFE = 2.0, RIP_MAX = 5, fronts = [], wakeN = 0;
     var ripLife = function () { return realLive ? WATER.life * 0.85 : RIP_LIFE; /* ≈1.5 s visible */ };
     var rpz = function () { return page && !O.fixed ? 1 : 0; }; // in parallax mode the rings ride on the page
-    // v1.5.1: a click or tap (no drag) draws v1.2.1's ring again: one slow, decelerating train of three hairlines
-    // (shade inside, light outside) that widens to ~160 px over 3.6 s and bends the fish it crosses. The press and lift
-    // packets, the dimple and the grid wake now belong to the stroke only, from the moment the pointer drags
-    var clk = [], CLK_LIFE = 3.6, CLK_MAX = 5, CLK_SWAP = 0.25;
+    // v1.5.2: a press's first ripple is the promo film's again, in every case (a click, a tap, a hold, the opening of a
+    // stroke). Real water: v1.3.1's ring, the slow Cauchy–Poisson ring the promo was filmed with (5 s, its own weights,
+    // see WATER), at the strength the film shows (CLK_S: the click plus the co-located hover packet v1.3.1 added when
+    // the pointer arrived). Flat water: v1.2.1's train of three hairlines (shade inside, light outside) widening to
+    // ~160 px over 3.6 s, as in v1.5.1. Either bends the fish it crosses. A press that becomes a stroke keeps its ring,
+    // softened as v1.3.1 did (CLK_S_DRAG); the dimple, the grid wake and the lift packet belong to the stroke
+    var clk = [], CLK_LIFE = 3.6, CLK_MAX = 5, CLK_SWAP = 0.25, CLK_S = 1.46, CLK_S_DRAG = 0.55;
+    var clkLife = function () { return realLive ? WATER.plife : CLK_LIFE; };
     var addClick = function (x, y) {
       if (!O.ripples || RM.matches) return null;
-      if (clk.length >= CLK_MAX) clk.shift();
-      var c = { x: x, y: y + sy * rpz(), t: 0, q: rnd(0, TAU) }; clk.push(c); wake(); return c;
+      var live = 0; // past CLK_MAX rings the oldest is retired over 0.8 s, never cut
+      for (var i = clk.length - 1; i >= 0; i--) if (!clk[i].die && ++live >= CLK_MAX) clk[i].die = 1;
+      var c = { x: x, y: y + sy * rpz(), t: 0, q: rnd(0, TAU), s: CLK_S, f: 1, e: 1, die: 0 }; clk.push(c); wake(); return c;
     };
-    var clkR = function (c) { var t = c.t * 1.12; return 78 * t / (1 + 0.2 * t); };
-    var clkEnv = function (c) { return M.min(1, c.t / 0.2) * M.pow(M.max(0, 1 - c.t / CLK_LIFE), 1.7); };
+    var clkR = function (c) { if (realLive) return WATER.pfront(c.t); var t = c.t * 1.12; return 78 * t / (1 + 0.2 * t); };
+    var clkEnv = function (c) {
+      if (realLive) return M.min(1, c.t / 0.2) * M.pow(M.max(0, 1 - c.t / WATER.plife), 1.7) * c.s * M.max(0, c.e); // v1.3.1's ring nudge
+      return M.min(1, c.t / 0.2) * M.pow(M.max(0, 1 - c.t / CLK_LIFE), 1.7) * c.f * M.max(0, c.e);
+    };
     // the surface holds about one firm ring's worth of disturbance (Σ strength × envelope ≤ RIP_SUM); past
     // RIP_MAX rings the oldest is retired over 0.8 s, never cut. A click may exceed the budget; a move may not.
     var RIP_SUM = 1.05;
@@ -850,15 +971,13 @@
           if (!P.held && M.abs(dy) > M.abs(dx) * 0.8) { press = null; return; } // moved before the hold, and not sideways: a scroll
         } else if (d < 6) return;
         P.act = true; trCut();
-        // a press that turns into a stroke at once is the stroke's: the click ring goes and v1.5's press packet takes its place,
-        // born when the pointer went down (so the stroke looks as it did in v1.5.0). After a still hold it was a click: its ring
-        // stays, and the stroke starts fresh here (dimple ramp, grid pressure)
+        // v1.5.2: the press's ring stays the stroke's opening ripple (no swap to v1.5.0's press packet); a press that
+        // becomes a stroke within 0.4 s gets the softer splash v1.3.1 gave it, as in the promo's drag. The wake is v1.5.1's:
+        // a stroke at once is born when the pointer went down (dimple ramp, grid pressure back-dated); after a still hold
+        // it starts fresh here
         var age = (performance.now() - P.t0) / 1000;
-        if (age < CLK_SWAP) {
-          var ci = clk.indexOf(P.clk); if (ci >= 0) clk.splice(ci, 1);
-          if (P.clk && addRipple(P.x0, P.y0, 1, true, P.clk.q)) { P.ring = rip[rip.length - 1]; P.ring.y = P.clk.y; P.ring.t = age; } // same phase and spot as the click ring: the random stream stays as in v1.5.0
-        } else { P.t0 = performance.now(); P.x0 = x; P.y0 = y; }
-        if (P.ring && P.ring.t < 0.4) P.ring.s *= 0.4; // a press that becomes a stroke: a softer splash, the line carries it
+        if (age >= CLK_SWAP) { P.t0 = performance.now(); P.x0 = x; P.y0 = y; }
+        if (P.clk && P.clk.t < 0.4) { P.clk.s = CLK_S_DRAG; P.clk.f = 0.55; }
         P.s = 1e-3; trl.push(P.first = { // ~0, not 0: s = 0 marks a separator, and the stroke must still grow from here
            x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
         trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); // the head follows the pointer until it is committed
@@ -964,7 +1083,7 @@
         var rq = rip[ri]; rq.t += dt; if (rq.die) rq.e -= dt / 0.8;
         if (rq.t > rq.life || rq.e <= 0 || rm) rip.splice(ri, 1);
       }
-      for (var cj = clk.length - 1; cj >= 0; cj--) { clk[cj].t += dt; if (clk[cj].t > CLK_LIFE || rm) clk.splice(cj, 1); }
+      for (var cj = clk.length - 1; cj >= 0; cj--) { var cq0 = clk[cj]; cq0.t += dt; if (cq0.die) cq0.e -= dt / 0.8; if (cq0.t > clkLife() || cq0.e <= 0 || rm) clk.splice(cj, 1); }
       if (rm || !trOn()) { trl.length = 0; press = null; }
       for (var ti = 0; ti < trl.length; ti++) trl[ti].t += dt; // a held-still head ages too: no standing bump
       while (trl.length && (trl[0].s <= 0 || trl[0].t > TRL_LS)) trl.shift();
@@ -1432,7 +1551,7 @@
           if (ak > 0.004) fronts.push({ x: rp.x, y: ry, r: rk, b: 8 + rk * 0.06, a: ak, w: [1, 0.8, 0.62][wk], q: rp.q });
         }
       }
-      for (var cr0 = 0; cr0 < clk.length; cr0++) { // click rings, as in v1.2.1 (drawn the same way in both water modes)
+      for (var cr0 = 0; cr0 < (realLive ? 0 : clk.length); cr0++) { // click rings, flat: as in v1.2.1 (real water: WATER's promo ring)
         var cp = clk[cr0], c0r = clkR(cp), cen = clkEnv(cp), cy0 = cp.y - sy * rpz();
         for (var ck = 0; ck < 3; ck++) {
           var crk = c0r - ck * (14 + c0r * 0.07);
@@ -1616,7 +1735,7 @@
       if (water) water.canvas.style.display = live ? "" : "none";
       stats.water = live ? "real" : waterFail && (O.water === "real" || O.ripples === "real") ? "fallback" : "flat";
     };
-    var wrects = [], wrings = [], wlook = {};
+    var wrects = [], wrings = [], wlook = {}, wclk = [];
     var paint = function () {
       render();
       if (!realLive) return;
@@ -1633,7 +1752,12 @@
       for (var k = 0; k < rip.length; k++) {
         var rp = rip[k], o2 = wrings[k] || {}; o2.x = rp.x; o2.y = rp.y - sy * rpz(); o2.t = rp.t; o2.s = rp.s * M.max(0, rp.e); o2.life = rp.life; wrings.push(o2);
       }
+      wclk.length = 0;
+      for (var kc = 0; kc < clk.length; kc++) {
+        var cc = clk[kc], o3 = wclk[kc] || {}; o3.x = cc.x; o3.y = cc.y - sy * rpz(); o3.t = cc.t; o3.s = cc.s * M.max(0, cc.e); o3.life = WATER.plife; wclk.push(o3);
+      }
       var L = wlook;
+      L.pfd = pal.pfd; L.psd = pal.psd; L.pcd = pal.pcd; L.pcb = pal.pcb; L.pcs = pal.pcs; L.pfr = pal.pfr; L.psg = pal.psg; L.pring = pal.pring; L.phz = pal.phz;
       L.lit = pal.qlit; L.ins = pal.qins; L.sky = pal.qsky; L.tr = pal.qtr; L.fd = pal.qfd; L.sd = pal.qsd; L.cd = pal.qcd; L.cb = pal.qcb; L.cs = pal.qcs;
       L.fr = pal.qfr; L.fi = pal.qfi; L.si = pal.qsi; L.sg = pal.qsg; L.ring = pal.qring; L.amb = pal.qamb; L.hz = pal.qhz; L.cg = pal.qcg; L.cp = pal.qcp || null; L.dmc = pal.qdmc || 0; L.wv = pal.qwv; L.rv = pal.qrv || 0; L.gg = pal.qgg || 1;
       var tn = 0, tsy = sy * rpz();
@@ -1645,7 +1769,7 @@
       var dA = press && press.act && press.dim != null ? M.min(1, (performance.now() - press.t0) / 60) : 0;
       trA.d[0] = press ? press.lx : 0; trA.d[1] = press ? press.ly : 0; trA.d[2] = dA;
       trA.d[3] = press ? press.x0 : 0; trA.d[4] = press ? press.y0 : 0; trA.d[5] = press ? (performance.now() - press.t0) / 1000 : 0;
-      water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L, trA);
+      water.draw(cv, shc, SH, wrings, wrects, T, sy * rpz(), L, trA, wclk);
       stats.wq = water.quality;
       // GPU work, summed (pixels shaded / uploaded, caustic vertices), for QA: divide by gw.n
       var gw = stats.gw, wk = water.work; gw.n++; gw.comp += wk.comp; gw.sim += wk.sim; gw.cau += wk.cau; gw.prof += wk.prof; gw.up += wk.up; gw.grid = (gw.grid || 0) + wk.grid;
@@ -1884,5 +2008,5 @@
     else autoInit();
   }
 
-  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.5.1" };
+  return { mount: mount, init: autoInit, defaults: DEFAULTS, instances: instances, version: "1.5.2" };
 });
