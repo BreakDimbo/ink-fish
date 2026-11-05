@@ -232,8 +232,8 @@
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
     // v1.5.3: 0.307× v1.5.2's speeds (300 → 92 px/s) at half its step rate (120 → 60 Hz: half the passes, and 4 steps
     // a frame now cover frames down to 15 fps): c², β, κ × (0.307·2)² = 0.377; damping and viscosity per second kept
-    // (0.991² per step, μ × 2); the pressure × 0.75, as the slower surface answers a press more deeply (offline copy:
-    // qa/demo-r15/gridsim.py)
+    // (0.991² per step, μ × 2); the pressure × 0.75, as the slower surface answers a press more deeply (checked against an
+    // offline numpy copy of this step, in the r15 QA notes)
     var GRID_P = 0.015, GRID_GAIN = 150, GRID_ON = 0.6, GRID_OND = 120;
     var GRID = { c2: 0.0716, b: 0.0113, k: 0.0113, mu: 0.012, damp: 0.982, R: 2.0, rate: 60, life: 2.0, fade: 0.45 };
     // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 1.31, must stay under 2(1 + a) with a the

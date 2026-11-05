@@ -1,0 +1,11 @@
+Shipped src QA-hook check (v1.5.3 tip, vs aa6c705 v1.5.2)
+grep -nE "window\.__|__step|_peek|__inkFishGridGain|console\.(log|debug)|debugger|Math\.random *=|qa/|localhost|127\.0\.0\.1" src/ink-fish.js src/ink-fish.css index.html
+  -> no matches (a first pass matched only a code comment naming qa/demo-r15/gridsim.py; reworded)
+added lines in src/ink-fish.js touching api./stats./window/document./globalThis/self.:
+  -> none (no new globals or API)
+files changed vs aa6c705 outside qa/:
+ README.md       |  6 +++++
+ index.html      |  4 ++--
+ src/ink-fish.js | 72 ++++++++++++++++++++++++++++++++++++++-------------------
+ 3 files changed, 56 insertions(+), 26 deletions(-)
+header: /*! ink-fish v1.5.3 — brush-ink fish s…; version: "1.5.3"; index.html: ink-fish.css?v=1.5.3 ink-fish.js?v=1.5.3 
