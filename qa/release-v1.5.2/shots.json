@@ -1,0 +1,46 @@
+[
+ {
+  "theme": "light",
+  "w": 1440,
+  "version": "1.5.2",
+  "water": "fallback",
+  "hooks": {
+   "peek": false,
+   "gain": false
+  },
+  "errors": []
+ },
+ {
+  "theme": "light",
+  "w": 390,
+  "version": "1.5.2",
+  "water": "real",
+  "hooks": {
+   "peek": false,
+   "gain": false
+  },
+  "errors": []
+ },
+ {
+  "theme": "dark",
+  "w": 1440,
+  "version": "1.5.2",
+  "water": "fallback",
+  "hooks": {
+   "peek": false,
+   "gain": false
+  },
+  "errors": []
+ },
+ {
+  "theme": "dark",
+  "w": 390,
+  "version": "1.5.2",
+  "water": "real",
+  "hooks": {
+   "peek": false,
+   "gain": false
+  },
+  "errors": []
+ }
+]
