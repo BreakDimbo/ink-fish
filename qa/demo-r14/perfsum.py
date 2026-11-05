@@ -5,7 +5,7 @@ C = collections.defaultdict(list)
 for l in open(log):
     if l.startswith('{'):
         r = json.loads(l); C[(r['size'], r['cpu'], r['mode'], r['build'])].append(r)
-o = [f"# {title}", "", "Gate: median library ms/frame (interleaved A B A B…, 5 reps each, headless Chrome/SwiftShader); pass if Δmedian ≤ max(baseline spread/2, 5 %). Frame interval (median of per-run means) shown too: the gate metric misses GPU cost.", "",
+o = [f"# {title}", "", "Gate: median library ms/frame (interleaved A B A B…, REPS reps each, headless Chrome/SwiftShader); pass if Δmedian ≤ max(baseline spread/2, 5 %). Frame interval (median of per-run means) shown too: the gate metric misses GPU cost.", "",
      f"| case | mode | {A} lib ms (runs) | {B} lib ms (runs) | Δ | allowance | gate | frame interval {A} → {B} ms (Δ) | grid cell-steps/frame |", "|---|---|---|---|---|---|---|---|---|"]
 ok_all = True; errs = 0
 for size, cpu in ((1440, 1), (390, 4)):

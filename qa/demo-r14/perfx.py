@@ -66,8 +66,8 @@ async def main():
         for c in os.environ["CASES"].split(";"):
             w, cpu, mode, var = c.split(","); w = int(w); h = 900 if w == 1440 else 844
             for rep in range(int(os.environ.get("REPS", "3"))):  # interleaved A/B: A B A B ...
-                for build in BUILDS:
-                    if var in build: plan.append((build, w, h, int(cpu), mode))
+                bl = [k for k in BUILDS if var in k]; r0 = rep % len(bl) if os.environ.get("ROTATE") else 0  # ROTATE: no slot bias
+                for build in bl[r0:] + bl[:r0]: plan.append((build, w, h, int(cpu), mode))
         for rep in range(0):  # extra interleaved repeats at 1440 4x scroll
             for build in BUILDS: plan.append((build, 1440, 900, 4, "scroll"))
         plan = plan[int(os.environ.get('SKIP', '0')):]
