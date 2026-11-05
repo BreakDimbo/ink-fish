@@ -7,6 +7,7 @@ F = ('water: "real",', 'water: "real", adaptive: false,')
 BUILDS = {  # r14: live v1.5.1 vs the v1.5.2 candidate, each on its own server
   "v1.5.1 real (adaptive)": ("http://127.0.0.1:8842/ink-fish/index.html", None),
   "v1.5.1 real (forced)":   ("http://127.0.0.1:8842/ink-fish/index.html", F),
+  "v1.5.1a real (forced)":  ("http://127.0.0.1:8842/ink-fish/index.html", F),  # A/A noise floor: same live build again
   "v1.5.2 real (adaptive)": ("http://127.0.0.1:8861/ink-fish/index.html", None),
   "v1.5.2 real (forced)":   ("http://127.0.0.1:8861/ink-fish/index.html", F),
 }
