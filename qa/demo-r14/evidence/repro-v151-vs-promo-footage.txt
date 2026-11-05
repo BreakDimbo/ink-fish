@@ -1,0 +1,12 @@
+f0000 mean 1.0069 max 113 px>8 0.340%
+f0015 mean 1.0074 max 104 px>8 0.335%
+f0030 mean 1.0172 max 100 px>8 0.406%
+f0045 mean 1.0377 max 97 px>8 0.491%
+f0059 mean 1.0670 max 111 px>8 0.579%
+f0060 mean 1.3991 max 106 px>8 1.833%
+f0061 mean 1.9461 max 123 px>8 4.039%
+f0062 mean 2.2131 max 118 px>8 6.122%
+f0063 mean 2.4269 max 95 px>8 8.714%
+f0065 mean 3.1855 max 133 px>8 13.953%
+f0068 mean 3.4932 max 139 px>8 14.015%
+f0071 mean 4.0965 max 144 px>8 16.677%
