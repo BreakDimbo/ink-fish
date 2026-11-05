@@ -1,0 +1,68 @@
+== drag-new light (a9b68f0) vs drag-new2 (d512d3f)
+f000 mean 0.000  >8: 0.000 %  max 0
+f014 mean 0.000  >8: 0.000 %  max 0
+f015 mean 0.000  >8: 0.000 %  max 0
+f016 mean 0.000  >8: 0.000 %  max 2
+f017 mean 0.001  >8: 0.000 %  max 2
+f018 mean 0.002  >8: 0.000 %  max 3
+f021 mean 0.007  >8: 0.000 %  max 6
+f024 mean 0.033  >8: 0.004 %  max 10
+f030 mean 0.049  >8: 0.002 %  max 10
+f045 mean 0.059  >8: 0.000 %  max 5
+f060 mean 0.073  >8: 0.000 %  max 5
+f075 mean 0.087  >8: 0.000 %  max 20
+f090 mean 0.094  >8: 0.001 %  max 38
+f105 mean 0.098  >8: 0.003 %  max 42
+f120 mean 0.102  >8: 0.008 %  max 68
+f135 mean 0.095  >8: 0.020 %  max 90
+f150 mean 0.089  >8: 0.035 %  max 91
+f165 mean 0.017  >8: 0.059 %  max 81
+f180 mean 0.027  >8: 0.099 %  max 77
+f181 mean 0.027  >8: 0.100 %  max 101
+f183 mean 0.029  >8: 0.106 %  max 89
+f186 mean 0.035  >8: 0.103 %  max 93
+f190 mean 0.062  >8: 0.111 %  max 110
+f195 mean 0.071  >8: 0.114 %  max 99
+f210 mean 0.084  >8: 0.141 %  max 127
+f225 mean 0.099  >8: 0.144 %  max 142
+f240 mean 0.111  >8: 0.144 %  max 141
+f255 mean 0.119  >8: 0.134 %  max 174
+f270 mean 0.133  >8: 0.163 %  max 146
+f285 mean 0.154  >8: 0.227 %  max 137
+ALL mean 0.083, worst frame mean 0.162 (f298), median >8: 0.034 %
+== drag-v151 light vs drag-new2
+ALL mean 0.491, worst frame mean 1.628 (f36), median >8: 0.382 %
+== drag-new dark (a9b68f0) vs drag-new2 (d512d3f)
+f000 mean 0.000  >8: 0.000 %  max 0
+f014 mean 0.000  >8: 0.000 %  max 0
+f015 mean 0.000  >8: 0.000 %  max 0
+f016 mean 0.000  >8: 0.000 %  max 1
+f017 mean 0.000  >8: 0.000 %  max 1
+f018 mean 0.001  >8: 0.000 %  max 2
+f021 mean 0.008  >8: 0.002 %  max 10
+f024 mean 0.026  >8: 0.081 %  max 16
+f030 mean 0.040  >8: 0.063 %  max 13
+f045 mean 0.041  >8: 0.000 %  max 5
+f060 mean 0.045  >8: 0.000 %  max 8
+f075 mean 0.047  >8: 0.000 %  max 14
+f090 mean 0.049  >8: 0.001 %  max 30
+f105 mean 0.049  >8: 0.002 %  max 37
+f120 mean 0.050  >8: 0.007 %  max 63
+f135 mean 0.044  >8: 0.017 %  max 92
+f150 mean 0.036  >8: 0.032 %  max 92
+f165 mean 0.014  >8: 0.048 %  max 84
+f180 mean 0.023  >8: 0.083 %  max 81
+f181 mean 0.023  >8: 0.080 %  max 76
+f183 mean 0.025  >8: 0.084 %  max 83
+f186 mean 0.033  >8: 0.087 %  max 87
+f190 mean 0.053  >8: 0.165 %  max 83
+f195 mean 0.060  >8: 0.112 %  max 97
+f210 mean 0.064  >8: 0.109 %  max 83
+f225 mean 0.071  >8: 0.116 %  max 104
+f240 mean 0.076  >8: 0.116 %  max 104
+f255 mean 0.075  >8: 0.108 %  max 107
+f270 mean 0.082  >8: 0.126 %  max 111
+f285 mean 0.096  >8: 0.160 %  max 119
+ALL mean 0.051, worst frame mean 0.105 (f299), median >8: 0.042 %
+== drag-v151 dark vs drag-new2
+ALL mean 0.218, worst frame mean 0.531 (f25), median >8: 0.253 %

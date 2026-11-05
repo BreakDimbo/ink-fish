@@ -1,0 +1,2 @@
+pclick-new-light (a9b68f0) vs pclickC-new-light (d512d3f): max abs diff over 240 frames = 0
+pclick-new-dark (a9b68f0) vs pclickC-new-dark (d512d3f): max abs diff over 240 frames = 0
