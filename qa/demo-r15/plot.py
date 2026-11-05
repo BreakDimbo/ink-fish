@@ -9,7 +9,7 @@ def ser(n, key, amin=0.0, tmax=9):
     m = (a > amin) & (v > 0) & (t > 0.05) & (t < tmax); return t[m], v[m], a
 ph = json.load(open(D + 'physics.json')); tb = ph['textbook']
 plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 10})
-fig, (ax, bx) = plt.subplots(1, 2, figsize=(13, 5.2), gridspec_kw={'width_ratios': [1.6, 1]})
+fig, (ax, bx, cx) = plt.subplots(1, 3, figsize=(17, 5.2), gridspec_kw={'width_ratios': [1.6, 1, 1]})
 T = np.linspace(0, 4, 50)
 # physics band: koi 30-45 cm -> 4.0-2.7 CSS px/cm (1440 px desktop)
 for ppc, a in ((4.0, .16), (2.7, .08)):
@@ -30,6 +30,13 @@ ax.set_title('How fast a tap spreads   (dots = crest, thin line = outermost visi
 ax.legend(fontsize=7.6, loc='upper left', frameon=False)
 bx.set_xlim(0, 4); bx.set_ylim(0, 1.6); bx.set_xlabel('seconds after the tap'); bx.set_ylabel('ring contrast vs its own 0.25-0.8 s peak')
 bx.set_title('How long it stays', fontsize=10.5, loc='left'); bx.legend(fontsize=8, frameon=False)
-for a in (ax, bx):
+for n, lab, c in (('s152-drag-wake.json', 'live v1.5.2', '#c0392b'), ('s153-drag-wake.json', 'v1.5.3', '#27ae60')):
+    r = json.load(open(D + n))['rows']; t = np.array([x['t'] for x in r]); v = np.array([x['lead'] for x in r], float)
+    cx.plot(t, v, 'o-', ms=3, lw=1, color=c, label=lab)
+cx.plot(T, tb['cmin_cm_s'] * 4 * np.maximum(0, T - 0.65), color='#3a7ca5', ls='-.', lw=1, label='real pond: $c_{min}$ from the finger passing (0.65 s)')
+cx.set_xlim(0, 4); cx.set_ylim(0, 420); cx.set_xlabel('seconds after the press'); cx.set_ylabel('outermost ripple off the stroke, CSS px (x = 500)')
+cx.set_title('A slow drag (200 px/s): how far the water moves aside', fontsize=10.5, loc='left'); cx.legend(fontsize=7.6, frameon=False)
+cx.annotate('v1.5.2: the press ring and the lift ring\nsweep past at ~600 px/s', (0.4, 300), fontsize=7.5, color='#c0392b')
+for a in (ax, bx, cx):
     for s in ('top', 'right'): a.spines[s].set_visible(False)
 fig.tight_layout(); fig.savefig('ring-radius-vs-time.png', dpi=150); print('ok')
