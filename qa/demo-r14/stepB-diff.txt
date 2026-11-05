@@ -1,0 +1,8 @@
+== pclick light
+ALL mean 0.000, worst frame mean 0.000 (f0), median >8: 0.000 %
+== drag light
+ALL mean 0.000, worst frame mean 0.000 (f0), median >8: 0.000 %
+== pclick dark
+ALL mean 0.000, worst frame mean 0.000 (f0), median >8: 0.000 %
+== drag dark
+ALL mean 0.000, worst frame mean 0.000 (f0), median >8: 0.000 %

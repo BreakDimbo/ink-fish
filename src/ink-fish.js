@@ -511,17 +511,31 @@ function create(D) {
         hadRings = nI > 0 || gk > 0;
         // 3b · v1.5.2: the promo rings (a click's ring), every frame while one lives, inside the box they can reach
         var nP = promo(prings, look);
-        // 4 · composite
-        var Po = nP ? PoP : Po0;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, c.width, c.height); gl.useProgram(Po.p);
-        bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
-        gl.uniform2f(Po.u.vp, W_, H_); gl.uniform2f(Po.u.ss, SHs / shC.width, SHs / shC.height);
-        gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
-        gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]); var k4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Po.u.k4, k4[0], k4[1], k4[2], k4[3]);
-        gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
-        if (nP) { gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, 1, 0); gl.uniform4fv(Po.u.k7, bI);
-          bindT(Po, "W2", 4, pT.W); bindT(Po, "B2", 5, pT.B); }
-        gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // 4 · composite. v1.5.2: v1.5.1's shader everywhere but the click rings' box, which alone runs the ring's
+        // (the two agree outside the box, so the seam is invisible: the box only bounds the extra work)
+        var comp = function (Po, ring) {
+          gl.useProgram(Po.p);
+          bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
+          gl.uniform2f(Po.u.vp, W_, H_); gl.uniform2f(Po.u.ss, SHs / shC.width, SHs / shC.height);
+          gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
+          gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]); var k4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Po.u.k4, k4[0], k4[1], k4[2], k4[3]);
+          gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
+          if (ring) { gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, 1, 0); gl.uniform4fv(Po.u.k7, bI);
+            bindT(Po, "W2", 4, pT.W); bindT(Po, "B2", 5, pT.B); }
+        };
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, c.width, c.height); gl.bindVertexArray(vaoT);
+        comp(Po0, false);
+        if (!nP) gl.drawArrays(gl.TRIANGLES, 0, 3);
+        else {
+          var CW = c.width, CH = c.height, X0 = Math.max(0, Math.floor(bI[0] * CW) - 1), Y0 = Math.max(0, Math.floor(bI[1] * CH) - 1),
+            X1 = Math.min(CW, Math.ceil(bI[2] * CW) + 1), Y1 = Math.min(CH, Math.ceil(bI[3] * CH) + 1);
+          gl.enable(gl.SCISSOR_TEST);
+          var rs = [0, 0, CW, Y0, 0, Y1, CW, CH - Y1, 0, Y0, X0, Y1 - Y0, X1, Y0, CW - X1, Y1 - Y0];
+          for (var q = 0; q < 16; q += 4) if (rs[q + 2] > 0 && rs[q + 3] > 0) { gl.scissor(rs[q], rs[q + 1], rs[q + 2], rs[q + 3]); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+          comp(PoP, true);
+          if (X1 > X0 && Y1 > Y0) { gl.scissor(X0, Y0, X1 - X0, Y1 - Y0); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+          gl.disable(gl.SCISSOR_TEST);
+        }
         gl.bindVertexArray(null);
         work.comp = c.width * c.height;
       };

@@ -1,0 +1,28 @@
+base lib 7.442 iv 109.1
+nopromo lib 6.760 iv 89.6
+dl2 lib 7.284 iv 102.5
+nosim lib 7.551 iv 115.9
+nocau lib 7.303 iv 105.4
+noblur lib 7.224 iv 107.5
+nocomp lib 6.786 iv 98.6
+base lib 6.636 iv 106.5
+nopromo lib 7.033 iv 97.1
+dl2 lib 6.930 iv 91.3
+nosim lib 7.367 iv 106.5
+nocau lib 7.238 iv 99.9
+noblur lib 6.420 iv 100.7
+nocomp lib 6.089 iv 94.6
+base lib 6.448 iv 116.2
+nopromo lib 5.806 iv 83.5
+dl2 lib 6.740 iv 93.2
+nosim lib 6.465 iv 100.7
+nocau lib 6.570 iv 98.6
+noblur lib 6.447 iv 103.0
+nocomp lib 6.607 iv 108.7
+base     lib median 6.636  iv median 109.1
+nopromo  lib median 6.760  iv median 89.6
+dl2      lib median 6.930  iv median 93.2
+nosim    lib median 7.367  iv median 106.5
+nocau    lib median 7.238  iv median 99.9
+noblur   lib median 6.447  iv median 103.0
+nocomp   lib median 6.607  iv median 98.6
