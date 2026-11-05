@@ -257,7 +257,7 @@
     // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
     // dither of ±½ step keeps the smooth light from banding in 8 bits.
     // Output is premultiplied "multiply the paper by (1−a), then add rgb", so the page shows through.
-    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc,k5,k6,k7;uniform sampler2D W2,B2;uniform vec2 ld;in vec2 v;out vec4 o;" +
+    var FS_COMPP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc,k5,k6,k7;uniform sampler2D W2,B2;uniform vec2 ld;in vec2 v;out vec4 o;" +
       "float inb(vec2 u){return step(0.,min(min(u.x,u.y),1.-max(u.x,u.y)));}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec4 w=texture(Wt,v);vec2 s=w.yz;float m=w.w;" +
       // v1.5.2: a click's ring (k6.z on) refracts, lights the floor and reflects with v1.3.1's weights, on its own slope s2
@@ -290,7 +290,12 @@
       "float d=(fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5)/255.;" +
       "o=vec4(add+d,1.-mul+d);}";
 
-    function create(D) {
+        // v1.5.2 · with no click ring alive the composite is v1.5.1's exactly: the ring's branches are cut from the source,
+    // so idle water and a plain stroke pay nothing for them (a GPU runs both sides of a per-pixel branch)
+    var FS_COMP = FS_COMPP.replace(",k5,k6,k7;uniform sampler2D W2,B2;", ";").replace(/bool pk=[^;]*;vec2 s2=vec2\(0\.\);float c2=1\.;if\(pk\)\{[^}]*\}/, "")
+      .replace(/if\(pk\)\{uf=[^}]*\}/, "").replace("m;if(pk)L+=(c2-1.)*k5.z*m;float e=", "m,e=").replace(/if\(pk\)\{vec3 n2[^}]*\}/, "");
+
+function create(D) {
       var c = D.createElement("canvas"), gl = null;
       try { gl = c.getContext("webgl2", { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: "low-power" }); } catch (e) { gl = null; }
       if (!gl || !gl.getExtension("EXT_color_buffer_float")) return null;
@@ -303,8 +308,8 @@
         for (var i = 0; i < n; i++) { var nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, ""); u[nm] = gl.getUniformLocation(p, nm); }
         return { p: p, u: u };
       };
-      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT), Psp = prog(VS_FULL, FS_SIMP), Pcp = prog(VS_CAUP, FS_CAU);
-      if (!Pp || !Ps || !Pc || !Pb || !Po || !Pg || !Pgs || !Psp || !Pcp) return null;
+      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po0 = prog(VS_FULL, FS_COMP), PoP = prog(VS_FULL, FS_COMPP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT), Psp = prog(VS_FULL, FS_SIMP), Pcp = prog(VS_CAUP, FS_CAU);
+      if (!Pp || !Ps || !Pc || !Pb || !Po0 || !PoP || !Pg || !Pgs || !Psp || !Pcp) return null;
       var tex = function (fmt, w, h, filt, type, data, f2) {
         var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
@@ -507,14 +512,15 @@
         // 3b · v1.5.2: the promo rings (a click's ring), every frame while one lives, inside the box they can reach
         var nP = promo(prings, look);
         // 4 · composite
+        var Po = nP ? PoP : Po0;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, c.width, c.height); gl.useProgram(Po.p);
         bindT(Po, "Fi", 0, tFi); bindT(Po, "Sh", 1, tSh); bindT(Po, "Wt", 2, tW); bindT(Po, "B", 3, tB);
         gl.uniform2f(Po.u.vp, W_, H_); gl.uniform2f(Po.u.ss, SHs / shC.width, SHs / shC.height);
         gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
         gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]); var k4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Po.u.k4, k4[0], k4[1], k4[2], k4[3]);
         gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
-        gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, nP ? 1 : 0, 0); gl.uniform4fv(Po.u.k7, bI);
-        bindT(Po, "W2", 4, nP ? pT.W : tW); bindT(Po, "B2", 5, nP ? pT.B : tB);
+        if (nP) { gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, 1, 0); gl.uniform4fv(Po.u.k7, bI);
+          bindT(Po, "W2", 4, pT.W); bindT(Po, "B2", 5, pT.B); }
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
         work.comp = c.width * c.height;
