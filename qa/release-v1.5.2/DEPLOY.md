@@ -26,7 +26,7 @@ git tag -a v1.5.2 v1.5.2-promoclick -m "ink-fish v1.5.2 — the first ripple is 
 git push origin refs/tags/v1.5.2
 ```
 
-Push size: 18–19 commits, about 266 new blobs, about 208 MB raw. Most of it is QA mp4s; they are already compressed, so the pack is about the same size. The largest blob is 4.66 MB (`qa/demo-r14/drag-newbare-light.mp4`), far below GitHub's 50 MB warning and 100 MB limit. Allow a few minutes for the upload.
+Push size: 20 commits (6e725b9..tip), about 266 new blobs, about 208 MB raw. Most of it is QA mp4s; they are already compressed, so the pack is about the same size. The largest blob is 4.66 MB (`qa/demo-r14/drag-newbare-light.mp4`), far below GitHub's 50 MB warning and 100 MB limit. Allow a few minutes for the upload.
 
 ## 3. Verify the live demo
 
