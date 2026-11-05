@@ -163,7 +163,7 @@
       var tp = t * PR_SLOW;
       for (var k = 0; k < NK; k++) { var kp = PKP[k]; out[o + k] = A * PR_DK * kp * Math.exp(-kp * kp * PR_SRC * PR_SRC / 4 - PVD[k] * tp) * Math.cos(PW[k] * tp); }
     };
-    var tableP = function () { // built on the first click (≈ 100k Bessel values)
+    var tableP = function () { // built once, when idle after the water starts (or on the first click, if that comes first)
       if (PJT) return PJT;
       PJT = new Float32Array(PR_NR * NK * 2);
       for (var k = 0; k < NK; k++) for (var r = 0; r < PR_NR; r++) {
@@ -176,7 +176,8 @@
       return PJT;
     };
     // how far out a promo ring can still tilt the floor light (CSS px, from its profile: < 0.01 px of caustic shift beyond)
-    var PR_REACH = function (t) { return Math.min(PR_RMAX, 300 + 60 * t); };
+    // (fitted to the profile of a click-strength ring in the dark theme, the stronger one: 0.01 px holds at every age)
+    var PR_REACH = function (t) { return Math.min(PR_RMAX, Math.max(70 + 110 * t, Math.min(190, 60 + 380 * t))); };
     var HEAD = "#version 300 es\nprecision highp float;precision highp sampler2D;\n";
     var VS_FULL = HEAD + "in vec2 a;out vec2 v;void main(){v=a*.5+.5;gl_Position=vec4(a,0.,1.);}";
     // per ring: η(r) and dη/dr summed over wavenumber
@@ -243,6 +244,8 @@
       "return g0.y*(g0.x*texture(Wt,h0)+g1.x*texture(Wt,vec2(h1.x,h0.y)))+g1.y*(g0.x*texture(Wt,vec2(h0.x,h1.y))+g1.x*texture(Wt,h1));}" +
       "uniform vec2 G;void main(){vec2 uv=mix(vec2(-E),vec2(1.+E),a),g=vec2(G.x,-G.y);vec2 s=.25*(bs(uv+G).yz+bs(uv-G).yz+bs(uv+g).yz+bs(uv-g).yz);vec2 p=vec2(uv.x,1.-uv.y)*vp,q=p+D*s;o0=p;" +
       "gl_Position=vec4(q.x/vp.x*2.-1.,1.-q.y/vp.y*2.,0.,1.);}";
+    // v1.5.2 · the same for a promo ring, on its box only: vertices outside the box (uv, Bx) skip the slope lookups
+    var VS_CAUP = VS_CAU.replace("uniform vec2 G;", "uniform vec2 G;uniform vec4 Bx;").replace("vec2 s=.25*(", "vec2 s=vec2(0.);if(all(greaterThan(uv,Bx.xy))&&all(lessThan(uv,Bx.zw)))s=.25*(");
     var FS_CAU = HEAD + "in vec2 o0;uniform float px;out vec4 o;void main(){vec2 x=dFdx(o0),y=dFdy(o0);o=vec4(min(abs(x.x*y.y-x.y*y.x)/px,10.),0.,0.,1.);}";
     // the sky is not a point: its penumbra blurs the floor light by about depth × its angular size (half resolution);
     // never less than one grid cell, so a young ring's tight wavelengths don't print the triangles as dashes
@@ -254,20 +257,20 @@
     // sky away from the zenith (k2.z: a faint cool line on a ring's crests in a dark room). A blue-noise-ish
     // dither of ±½ step keeps the smooth light from banding in 8 bits.
     // Output is premultiplied "multiply the paper by (1−a), then add rgb", so the page shows through.
-    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc,k5,k6;uniform sampler2D W2,B2;uniform vec2 ld;in vec2 v;out vec4 o;" +
+    var FS_COMP = HEAD + "uniform sampler2D Fi,Sh,Wt,B;uniform vec2 vp,ss;uniform vec3 lit,ins,sky,tr;uniform vec4 k1,k2,k3,k4,Dc,k5,k6,k7;uniform sampler2D W2,B2;uniform vec2 ld;in vec2 v;out vec4 o;" +
       "float inb(vec2 u){return step(0.,min(min(u.x,u.y),1.-max(u.x,u.y)));}" +
       "void main(){vec2 p=vec2(v.x,1.-v.y)*vp;vec4 w=texture(Wt,v);vec2 s=w.yz;float m=w.w;" +
       // v1.5.2: a click's ring (k6.z on) refracts, lights the floor and reflects with v1.3.1's weights, on its own slope s2
-      "vec2 s2=vec2(0.);float c2=1.;if(k6.z>.5){s2=texture(W2,v).yz;c2=texture(B2,v).r;}" +
-      "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;if(k6.z>.5){uf=(p+k1.x*s+k5.x*s2)/vp;us=(p+k1.y*s+k5.y*s2)*ss;}vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
+      "bool pk=k6.z>.5&&all(greaterThan(v,k7.xy))&&all(lessThan(v,k7.zw));vec2 s2=vec2(0.);float c2=1.;if(pk){s2=texture(W2,v).yz;c2=texture(B2,v).r;}" +
+      "vec2 uf=(p+k1.x*s)/vp,us=(p+k1.y*s)*ss;if(pk){uf=(p+k1.x*s+k5.x*s2)/vp;us=(p+k1.y*s+k5.y*s2)*ss;}vec4 f=texture(Fi,uf)*inb(uf);float sh=texture(Sh,us).a*inb(us);" +
       // the light comes in at a slant: the floor pattern sits a few px below-right of the surface that casts it
       "float c=texture(B,v-vec2(5.,-7.)/vp).r;" +
-      "float L=1.+(c-1.)*k1.z*m;if(k6.z>.5)L+=(c2-1.)*k5.z*m;float e=(1.-sh)*L;" +
+      "float L=1.+(c-1.)*k1.z*m;if(pk)L+=(c2-1.)*k5.z*m;float e=(1.-sh)*L;" +
       "float mul=min(e,1.);vec3 add=lit*max(e-1.,0.)+ins*sh*k2.y;" +
       "add=add*(1.-f.a)+f.rgb*tr+ins*f.a*k2.x;mul*=1.-f.a;" +
       "vec3 n=normalize(vec3(-s,1.));float F=.02+.98*pow(1.-n.z,5.);vec2 r=2.*n.z*n.xy;" +
       "float q=(F*(1.+k2.w*dot(r,ld))-.02)*k1.w*m,hz=min(k2.z*dot(s,s),.1)*m;add+=sky*(max(q,0.)+hz);mul*=(1.+min(q,0.))*(1.-hz);" +
-      "if(k6.z>.5){vec3 n2=normalize(vec3(-s2,1.));float F2=.02+.98*pow(1.-n2.z,5.);vec2 r2=2.*n2.z*n2.xy;" +
+      "if(pk){vec3 n2=normalize(vec3(-s2,1.));float F2=.02+.98*pow(1.-n2.z,5.);vec2 r2=2.*n2.z*n2.xy;" +
       "float q2=(F2*(1.+k6.y*dot(r2,ld))-.02)*k5.w*m,h2=min(k6.x*dot(s2,s2),.1)*m;add+=sky*(max(q2,0.)+h2);mul*=(1.+min(q2,0.))*(1.-h2);}" +
       // v1.4: each crest as a thin sliver of the brighter sky on its lit face (and a faint shade on the far face),
       // tone-mapped so the fine capillary front reads as well as the coarse crests behind it
@@ -300,8 +303,8 @@
         for (var i = 0; i < n; i++) { var nm = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, ""); u[nm] = gl.getUniformLocation(p, nm); }
         return { p: p, u: u };
       };
-      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT), Psp = prog(VS_FULL, FS_SIMP);
-      if (!Pp || !Ps || !Pc || !Pb || !Po || !Pg || !Pgs || !Psp) return null;
+      var Pp = prog(VS_FULL, FS_PROF), Ps = prog(VS_FULL, FS_SIM), Pc = prog(VS_CAU, FS_CAU), Pb = prog(VS_FULL, FS_BLUR), Po = prog(VS_FULL, FS_COMP), Pg = prog(VS_FULL, FS_GSTEP), Pgs = prog(VS_FULL, FS_GSHIFT), Psp = prog(VS_FULL, FS_SIMP), Pcp = prog(VS_CAUP, FS_CAU);
+      if (!Pp || !Ps || !Pc || !Pb || !Po || !Pg || !Pgs || !Psp || !Pcp) return null;
       var tex = function (fmt, w, h, filt, type, data, f2) {
         var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
@@ -322,7 +325,7 @@
       var tG = [tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG), tex(gl.RG16F, 1, 1, gl.LINEAR, gl.HALF_FLOAT, null, gl.RG)], fG = [fbo(tG[0]), fbo(tG[1])];
       if (!fP || !fW || !fC || !fB || !fG[0] || !fG[1]) return null;
       // v1.5.2 · the promo rings' kernel table, profile rows, surface, caustic and its penumbra: made on the first click
-      var pT = null, pF = new Float32Array(NK * PR_SLOTS), pI = new Float32Array(PR_SLOTS * 4), pW = 0, pH = 0;
+      var pT = null, bI = new Float32Array(4), pF = new Float32Array(NK * PR_SLOTS), pI = new Float32Array(PR_SLOTS * 4), pW = 0, pH = 0;
       var promoTex = function () {
         if (!pT) {
           pT = { J: tex(gl.RG32F, PR_NR, NK, gl.NEAREST, gl.FLOAT, tableP(), gl.RG), F: tex(gl.R32F, NK, PR_SLOTS, gl.NEAREST, gl.FLOAT, null, gl.RED),
@@ -509,7 +512,7 @@
         gl.uniform3fv(Po.u.lit, look.lit); gl.uniform3fv(Po.u.ins, look.ins); gl.uniform3fv(Po.u.sky, look.sky); gl.uniform3fv(Po.u.tr, look.tr);
         gl.uniform4f(Po.u.k1, look.fd, look.sd, look.cs, look.fr); gl.uniform4f(Po.u.k2, look.fi, look.si, look.hz || 0, look.sg); var k3 = look.cg || [0, 0, 0, 1]; gl.uniform4f(Po.u.k3, k3[0], k3[1], k3[2], k3[3]); var k4 = look.cp || [0, 1, 0, 1]; gl.uniform4f(Po.u.k4, k4[0], k4[1], k4[2], k4[3]);
         gl.uniform2f(Po.u.ld, -0.6, -0.8); gl.uniform4f(Po.u.Dc, dm ? dm[0] : 0, dm ? dm[1] : 0, dm ? dm[2] * (look.dmc || 0) : 0, 13);
-        gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, nP ? 1 : 0, 0);
+        gl.uniform4f(Po.u.k5, look.pfd, look.psd, look.pcs, look.pfr); gl.uniform4f(Po.u.k6, look.phz, look.psg, nP ? 1 : 0, 0); gl.uniform4fv(Po.u.k7, bI);
         bindT(Po, "W2", 4, nP ? pT.W : tW); bindT(Po, "B2", 5, nP ? pT.B : tB);
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindVertexArray(null);
@@ -539,30 +542,37 @@
         // the box in half-res texels (row 0 is the bottom of the page)
         var sx0 = Math.floor(x0 / W_ * sw), sx1 = Math.ceil(x1 / W_ * sw), sy0 = Math.floor((H_ - y1) / H_ * shh), sy1 = Math.ceil((H_ - y0) / H_ * shh);
         var bw = sx1 - sx0, bh = sy1 - sy0;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fW); gl.viewport(0, 0, sw, shh); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.enable(gl.SCISSOR_TEST); gl.scissor(sx0, sy0, bw, bh);
+        // only the box is ever read (the composite samples these textures inside it alone), so only the box is cleared
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fW); gl.viewport(0, 0, sw, shh);
+        gl.enable(gl.SCISSOR_TEST); gl.scissor(sx0, sy0, bw, bh); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(Psp.p); bindT(Psp, "P", 0, pT.P); gl.uniform2f(Psp.u.vp, W_, H_); gl.uniform4fv(Psp.u.I, pI);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        // caustics: floor light 1 outside the box; inside, the caustic grid's rows that cover it (and two more each side)
-        gl.disable(gl.SCISSOR_TEST);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fC); gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.enable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+        // caustics, in the box: the caustic grid's rows that cover it (and two more each side)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fC); gl.clear(gl.COLOR_BUFFER_BIT);
         var E = 0.04, a0 = (1 + E - y1 / H_) / (1 + 2 * E), a1 = (1 + E - y0 / H_) / (1 + 2 * E);
         var r0 = Math.max(0, Math.floor(a0 * (gNY - 1)) - 2), r1 = Math.min(gNY - 2, Math.ceil(a1 * (gNY - 1)) + 2);
         gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-        gl.useProgram(Pc.p); bindT(Pc, "Wt", 0, pT.W);
-        gl.uniform2f(Pc.u.ws, sw, shh); gl.uniform2f(Pc.u.vp, W_, H_); gl.uniform1f(Pc.u.D, look.pcd); gl.uniform1f(Pc.u.E, E); gl.uniform2f(Pc.u.G, grid * 0.5 / W_, grid * 0.5 / H_);
-        gl.uniform1f(Pc.u.px, (W_ / sw) * (H_ / shh));
+        gl.useProgram(Pcp.p); bindT(Pcp, "Wt", 0, pT.W);
+        gl.uniform2f(Pcp.u.ws, sw, shh); gl.uniform2f(Pcp.u.vp, W_, H_); gl.uniform1f(Pcp.u.D, look.pcd); gl.uniform1f(Pcp.u.E, E); gl.uniform2f(Pcp.u.G, grid * 0.5 / W_, grid * 0.5 / H_);
+        gl.uniform1f(Pcp.u.px, (W_ / sw) * (H_ / shh)); var gm = 3 * grid;
+        gl.uniform4f(Pcp.u.Bx, (x0 - gm) / W_, 1 - (y1 + gm) / H_, (x1 + gm) / W_, 1 - (y0 - gm) / H_);
         gl.bindVertexArray(vaoG); if (r1 >= r0) gl.drawElements(gl.TRIANGLES, (r1 - r0 + 1) * (gNX - 1) * 6, gl.UNSIGNED_INT, r0 * (gNX - 1) * 6 * 4);
         gl.disable(gl.BLEND); gl.disable(gl.SCISSOR_TEST);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fB); gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.enable(gl.SCISSOR_TEST); gl.useProgram(Pb.p);
-        bindT(Pb, "C", 0, pT.C); var cr = Math.max(look.pcb, grid); gl.uniform2f(Pb.u.cb, cr / W_, cr / H_);
+        // the penumbra on the inner box (its taps reach cr CSS px, so they stay inside the cleared box)
+        // (a side on the canvas edge needs no margin: there the taps clamp to the edge texel, which is in the box)
+        var cr = Math.max(look.pcb, grid), mx = Math.ceil(cr / W_ * sw) + 1, my = Math.ceil(cr / H_ * shh) + 1;
+        var ml = sx0 > 0 ? mx : 0, mr = sx1 < sw ? mx : 0, mb = sy0 > 0 ? my : 0, mt = sy1 < shh ? my : 0;
+        // the composite reads B2 bilinearly, so its box stays 1.5 texels inside the blurred one (no stale texel at the seam)
+        bI[0] = ml ? (sx0 + ml + 1.5) / sw : -1; bI[1] = mb ? (sy0 + mb + 1.5) / shh : -1; bI[2] = mr ? (sx1 - mr - 1.5) / sw : 2; bI[3] = mt ? (sy1 - mt - 1.5) / shh : 2;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pT.fB); gl.enable(gl.SCISSOR_TEST); gl.scissor(sx0 + ml, sy0 + mb, Math.max(0, bw - ml - mr), Math.max(0, bh - mb - mt));
+        gl.useProgram(Pb.p); bindT(Pb, "C", 0, pT.C); gl.uniform2f(Pb.u.cb, cr / W_, cr / H_);
         gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.disable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 0);
         work.prof += PR_NR * nP; work.sim += bw * bh * 3; work.cau += (r1 - r0 + 2) * gNX;
         return nP;
       };
+      // the promo kernel table (≈ 100k Bessel values) is made while the page is idle, so a first click costs no more than the next
+      if (!PJT) { if (typeof requestIdleCallback === "function") requestIdleCallback(function () { tableP(); }, { timeout: 4000 }); else setTimeout(tableP, 1500); }
       var api = {
         canvas: c, resize: resize, draw: draw, work: work,
         get lost() { return lost; },
