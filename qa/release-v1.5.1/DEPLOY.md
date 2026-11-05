@@ -3,7 +3,7 @@
 Approved by the owner ("可以，上线并更新github", 2026-11-05 09:39 SGT). The release branch fast-forwards onto `origin/main`. Push fast-forward only, and never force.
 
 - Base: `origin/main` = `f4a3191` (v1.5.0; tag `v1.5.0` already on origin)
-- Release tip: `0648a3ffa770f18a3de7c1e62768f352a143ce6d` on branch `v1.5.1-click` (code QA'd from `2c6a14c` / `2370e13`; later commits are README/`?v=`, release QA harness and records, and this note)
+- Release tip: the head of branch `v1.5.1-click` (see the bundle below; the click code was QA'd at `2c6a14c` / `2370e13`, and later commits only add README/`?v=1.5.1`, release QA records and this note)
 - Bundle: `/workspace/ink-fish-v1.5.1.bundle` (prerequisite `f4a3191`, ref `refs/heads/v1.5.1-click`)
 
 ## 1. Get the release commits (if not deploying from /workspace/ink-fish)
