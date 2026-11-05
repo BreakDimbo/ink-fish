@@ -4,8 +4,6 @@ from playwright.async_api import async_playwright
 BASE = os.environ.get("BASE", "http://127.0.0.1:8733/")
 F = ('water: "real",', 'water: "real", adaptive: false,')
 BUILDS = {
-  "v1.3.1 real (adaptive)": ("qa/demo-r9/base/index.html", None),
-  "v1.3.1 real (forced)": ("qa/demo-r9/base/index.html", F),
   "v1.5.0 real (adaptive)": ("qa/demo-r13/v150/index.html", None),
   "v1.5.0 real (forced)": ("qa/demo-r13/v150/index.html", F),
   "v1.5.1 real (adaptive)": ("index.html", None),
