@@ -10,6 +10,8 @@ V = {
   "base": [],
   "nopromo": [("var nP = promo(prings, look);", "var nP = 0;")],
   "dl2": DL("2.0"),
+  "dl27": DL("2.7"),
+  "dl34": DL("3.4"),
   "nosim": [(SIM, "gl.uniform4fv(Psp.u.I, pI);")],
   "nocau": [("if (r1 >= r0) gl.drawElements", "if (false) gl.drawElements")],
   "noblur": [("gl.uniform2f(Pb.u.cb, cr / W_, cr / H_);\n        gl.bindVertexArray(vaoT); gl.drawArrays(gl.TRIANGLES, 0, 3);", "gl.uniform2f(Pb.u.cb, cr / W_, cr / H_);")],

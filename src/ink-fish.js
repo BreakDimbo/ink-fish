@@ -1008,7 +1008,9 @@ function create(D) {
         // it starts fresh here
         var age = (performance.now() - P.t0) / 1000;
         if (age >= CLK_SWAP) { P.t0 = performance.now(); P.x0 = x; P.y0 = y; }
-        if (P.clk && P.clk.t < 0.4) { P.clk.s = CLK_S_DRAG; P.clk.f = 0.55; }
+        // v1.5.2 perf: a press that becomes a stroke at once lets its ring go (0.3 s): a pure stroke opens with v1.5.1's
+        // wake alone, eased on (GRID_ON), and the ring's passes stop; a hold keeps its ring
+        if (P.clk && P.clk.t < 0.4) { P.clk.s = CLK_S_DRAG; P.clk.f = 0.55; P.clk.dk = 1; }
         P.s = 1e-3; trl.push(P.first = { // ~0, not 0: s = 0 marks a separator, and the stroke must still grow from here
            x: P.x0, y: P.y0 + sy * rpz(), t: 0, s: P.s });
         trl.push({ x: x, y: py, t: 0, s: P.s, h: 1 }); // the head follows the pointer until it is committed
@@ -1114,7 +1116,7 @@ function create(D) {
         var rq = rip[ri]; rq.t += dt; if (rq.die) rq.e -= dt / 0.8;
         if (rq.t > rq.life || rq.e <= 0 || rm) rip.splice(ri, 1);
       }
-      for (var cj = clk.length - 1; cj >= 0; cj--) { var cq0 = clk[cj]; cq0.t += dt; if (cq0.die) cq0.e -= dt / 0.8; if (cq0.t > clkLife() || cq0.e <= 0 || rm) clk.splice(cj, 1); }
+      for (var cj = clk.length - 1; cj >= 0; cj--) { var cq0 = clk[cj]; cq0.t += dt; if (cq0.dk) cq0.e -= dt / 0.3; else if (cq0.die) cq0.e -= dt / 0.8; if (cq0.t > clkLife() || cq0.e <= 0 || rm) clk.splice(cj, 1); }
       if (rm || !trOn()) { trl.length = 0; press = null; }
       for (var ti = 0; ti < trl.length; ti++) trl[ti].t += dt; // a held-still head ages too: no standing bump
       while (trl.length && (trl[0].s <= 0 || trl[0].t > TRL_LS)) trl.shift();
