@@ -1,0 +1,4 @@
+Shipped src QA-hook check (tip after 0bc3905, vs 6e725b9 v1.5.1)
+grep -nE "window\.__|__step|_peek|__inkFishGridGain|console\.(log|debug)|debugger|Math\.random *=|qa/|localhost|127\.0\.0\.1" src/ink-fish.js src/ink-fish.css index.html  -> no matches
+added lines in src/ink-fish.js touching api./stats./window/document./globalThis/self. -> none (no new globals or API)
+header: /*! ink-fish v1.5.2 ...; InkFish.version: "1.5.2"; index.html loads src/ink-fish.{js,css}?v=1.5.2
