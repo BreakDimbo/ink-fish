@@ -266,6 +266,12 @@ The real-water methods come from [Ultra Water](https://github.com/Humpalumps/Ult
 
 ## Changelog 更新日志
 
+### v1.5.1 — clicks go back to the original hairline rings
+
+A click or tap (press and release with no meaningful drag) again draws the restrained v1.2.1 hairline ring: a slow train of three shade+light fronts that grow and fade over about 3.6 s, with a soft bend on any fish a ring crosses. The v1.5.0 press ring, release ring, dimple and stationary grid stamp stay off for a click. Once the pointer moves past the existing drag threshold (6 px mouse; 8 px plus a hold or sideways start on touch), the drag wake, dimple and V are the same as in v1.5.0. A still press-and-hold is treated as a click. `water: 'real'` API unchanged; on headless Chrome the library costs no more per frame than v1.5.0 in any of the four gate cases.
+
+点击或轻点（按下抬起且无明显拖动）恢复为 v1.2.1 的克制发丝波圈：三道明暗细线缓慢扩大并在约 3.6 秒内淡出，扫过的鱼线会轻微折射。v1.5.0 的按下圈、抬起圈、凹陷和定点网格压痕在点击时不再出现。指针越过原有拖动阈值后，拖动尾迹、凹陷与 V 形与 v1.5.0 一致。按住不动视为点击。API 不变，性能不低于 v1.5.0。
+
 ### v1.5.0 — a real wave simulation for the drag wake
 
 Pressing and dragging now pushes on a small simulated water surface instead of drawing pre-computed wavelets. The surface is a grid with one cell every 5 CSS px (10 px on the cheaper quality), stepped 120 times a second (60 on the cheaper quality) with water-like dispersion. Short ripples run ahead of the press. A slow drag, under about 300 px/s, carries only its dent. A fast flick leaves a narrow V whose arms carry fine parallel crests. Only the part of the grid the wake has reached is stepped, and the grid sleeps 2 s after the last press: it fades over the last 0.45 s, then is cleared and stops costing anything. It moves with the page when you scroll and pauses with the tab. In the dark theme the crests catch a restrained sky sheen, so the press and lift rings and both arms of the V read while calm water stays dark. Press and lift rings, the dimple, refraction and caustics are as in v1.4. `water: 'real'` API unchanged. On headless Chrome (software GL) the library costs no more per frame than v1.3.1 in any of the four gate cases, and the 1440px drag frame interval is slightly lower. This release also includes v1.3.2 and v1.4.0 below, which were not released separately.
