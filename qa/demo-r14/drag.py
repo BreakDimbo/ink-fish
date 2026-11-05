@@ -70,6 +70,16 @@ async def main():
             if os.environ.get("MEASURE"): body = body.replace("koi: true,", "koi: false, opacity: 0, shadow: 0,")
             await r.fulfill(response=resp, body=body)
         await pg.route("**/index.html", route)
+        if os.environ.get("PATCHJS"):  # JSON [[from, to], ...] applied to src/ink-fish.js (diagnostic variants)
+            import json
+            PJ = json.loads(os.environ["PATCHJS"])
+            async def rjs(r):
+                resp = await r.fetch(); body = await resp.text()
+                for x, y in PJ:
+                    assert x in body, x
+                    body = body.replace(x, y)
+                await r.fulfill(response=resp, body=body)
+            await pg.route("**/src/ink-fish.js*", rjs)
         await pg.goto(url); await pg.wait_for_timeout(600)
         if kind == "click":  # park the pointer first; its hover ring dies out during the warm-up
             q0 = path(0); await pg.mouse.move(q0[0], q0[1])

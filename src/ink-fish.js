@@ -218,7 +218,7 @@
     // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
     // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
-    var GRID_P = 0.02, GRID_GAIN = 150, GRID_ON = 0.6;
+    var GRID_P = 0.02, GRID_GAIN = 150, GRID_ON = 0.6, GRID_OND = 120;
     var GRID = { c2: 0.19, b: 0.03, k: 0.03, mu: 0.006, damp: 0.991, R: 2.0, rate: 120, life: 2.0, fade: 0.45 };
     // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 3.47, must stay under 2(1 + a) with a the
     // per-step velocity retention (damping × viscosity × sponge, ≥ 0.77 at the border): 3.55
@@ -409,9 +409,10 @@
           gPx = trail.d[3]; gPy = trail.d[4]; gPr = Math.max(0, Math.min(1, (trail.d[5] - dt) / 0.12)); gOn = 0;
         }
         gPr = on ? Math.min(1, gPr + dt / 0.12) : Math.max(0, gPr - dt / 0.12);
-        // v1.5.2: a fresh stroke's pressure comes on over GRID_ON s (eased), not at once, so its onset no longer rings out as
-        // a second, larger splash beside the press's own (promo) ring; once on, the wake is v1.5.1's
-        gOn = Math.min(1, gOn + dt / GRID_ON); var gE = gOn * gOn * (3 - 2 * gOn);
+        // v1.5.2: a fresh stroke's pressure comes on over GRID_ON s (eased), not at once, so a slow start no longer rings
+        // out as a second, larger splash beside the press's own (promo) ring. Distance counts too (full after GRID_OND px):
+        // a flick spreads its onset along its path, rings out nothing, and keeps v1.5.1's V. Once on, the wake is v1.5.1's
+        gOn = Math.min(1, gOn + dt / GRID_ON + (on ? Math.hypot(px - gPx, py - gPy) / GRID_OND : 0)); var gE = gOn * gOn * (3 - 2 * gOn);
         if (gPr > 0) { gLast = T; if (!gLive) { gClear(); gLive = true; gAcc = 0; } }
         if (!gLive) return 0;
         if (T - gLast > GRID.life) { gLive = false; gClear(); return 0; }
