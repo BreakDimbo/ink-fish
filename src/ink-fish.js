@@ -78,15 +78,19 @@
   //  · The fish and their shadows are refracted by the slope (deeper layers shift further), seen through
   //    a Beer–Lambert water column, and the surface adds a Fresnel-weighted reflection of a soft sky.
   var WATER = (function () {
-    var S = 6e-4, G = 9.81, SR = 7.4e-5;   // metres per CSS px; g; σ/ρ
-    // v1.3.2: rings and trails run in real time with water's own viscosity (v1.3.2 ran them at 0.22× with 6× the
-    // viscosity, which read as syrup); only the idle ambient swell stays slowed. Scale: 1 cm = 16.7 CSS px.
+    var S = 2.5e-3, G = 9.81, SR = 7.4e-5; // metres per CSS px; g; σ/ρ
+    // v1.3.2: rings and trails run in real time with water's own viscosity; only the idle ambient swell stays slowed.
+    // v1.5.3: the scale is the koi's. A koi is ~120 CSS px nose to tail at 1440 (L 62–96 + tail); a young koi is ~30 cm,
+    // so 1 cm = 4 CSS px (it was 16.7, a hand-sized pond, which made every ring and wake ~4× too fast for the fish in
+    // it). At this scale the textbook speeds come out as the film's: cg,min 17.8 cm/s ≈ 71 px/s (the calm centre's
+    // edge, the bright crest), c_min 23.2 cm/s ≈ 93 px/s (the leading fringe the half-res surface resolves); the promo
+    // ring (PR_*, the film's own) measures 86 px/s at its crest in the final cut
     var ASLOW = 0.1;                        // slow motion of the ambient swell only
     var NU = 1.2e-6;                        // kinematic viscosity: clean water (1.0e-6) plus a trace of surface film
     var WAVELET = 0.009, SRC = 3.2, SRCL = 8, NK = 192, NR = 1024, RMAX = 900, SLOTS = 8, SIM = 0.5;
     // every ring and trail profile depends only on (distance, age), so both live in one static table, filled once:
     // NTR rows for a point source over ages 0…LR, NTL rows for a line source over 0…LS (≈10 ms per row, so a
-    // front moving ~400 px/s shifts ≤ 4 px between rows and stays crisp under linear filtering)
+    // front moving ~90 px/s shifts ≤ 1 px between rows and stays crisp under linear filtering)
     var NTR = 192, NTL = 192, LR = 2.0, LS = 1.8, NS = 64, ROWS = NTR + NTL, NORMT = 0.12;
     var DK = 4.2 / 4.5 / NK, KP = new Float32Array(NK), W = new Float32Array(NK), VD = new Float32Array(NK);
     // The k grid (to 0.93 px⁻¹, λ ≥ 6.7 px: finer than the half-res sim resolves) is uniform, so a profile is periodic
@@ -155,9 +159,11 @@
     // pond's surface film (6× viscosity), from one fingertip-wide source, 5 s long. Its own k grid, kernel table and
     // per-frame profile rows (one per live ring, as v1.3.1 drew them), and its own surface, caustic and composite
     // weights (look.p*), so the stroke's wake and everything else keep v1.5.1's water exactly
-    var PR_SLOW = 0.22, PR_NU = 6e-6, PR_SRC = 7, PR_NR = 512, PR_RMAX = 640, PR_SLOTS = 8, PR_LIFE = 5;
+    // (v1.5.3: on its own scale, PR_S, v1.3.1's 16.7 px/cm: slowed 0.22× there it already runs at the koi scale's speeds,
+    // 86 px/s at the crest, which is the timing the film shows; the rings, trails and wake now share that timing)
+    var PR_SLOW = 0.22, PR_NU = 6e-6, PR_SRC = 7, PR_NR = 512, PR_RMAX = 640, PR_SLOTS = 8, PR_LIFE = 5, PR_S = 6e-4;
     var PR_DK = 4.2 / PR_SRC / NK, PKP = new Float32Array(NK), PW = new Float32Array(NK), PVD = new Float32Array(NK);
-    for (var pi = 0; pi < NK; pi++) { var pkp = (pi + 0.5) * PR_DK, pkm = pkp / S; PKP[pi] = pkp; PW[pi] = Math.sqrt(G * pkm + SR * pkm * pkm * pkm); PVD[pi] = 2 * PR_NU * pkm * pkm; }
+    for (var pi = 0; pi < NK; pi++) { var pkp = (pi + 0.5) * PR_DK, pkm = pkp / PR_S; PKP[pi] = pkp; PW[pi] = Math.sqrt(G * pkm + SR * pkm * pkm * pkm); PVD[pi] = 2 * PR_NU * pkm * pkm; }
     var PJT = null, PNORM = 1;
     var specP = function (t, A, out, o) {
       var tp = t * PR_SLOW;
@@ -213,15 +219,21 @@
       "o=vec4(0.,s,0.);}";
     // v1.5 · the drag wake: a height field (h, v) stepped at a fixed rate on a coarse grid. Each step
     //   v += c²∇²h − β∇⁴h − κh + μ∇²v − pressure;  v *= damping;  h += v
-    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min = √(c² + 2√(κβ)) ≈ 0.5 cell/step ≈ 300 px/s at 5 px cells, at λ ≈ 6 cells ≈ 30 px), a pressure moving slower than it
+    // so ω² = κ + c²k² + βk⁴: the phase speed has a minimum (c_min = √(c² + 2√(κβ)) ≈ 0.31 cell/step ≈ 92 px/s at 5 px cells
+    // and 60 steps/s: water's 23 cm/s at the koi's 4 px/cm; at λ ≈ 6 cells ≈ 30 px, coarser than the real 1.7 cm, which
+    // the grid cannot hold), a pressure moving slower than it
     // just carries its own depression along (no wake), a faster one sheds a V, and the β term makes short ripples
     // run ahead of long ones (capillary-like). The pressure is a capsule along the pointer's path during the step
     // (a raised cosine around the segment), weighted by the time each point spends under it, so a fast flick
     // never prints as a row of beads. Borders absorb (a sponge), the page has no walls.
-    var GRID_P = 0.02, GRID_GAIN = 150, GRID_ON = 0.6, GRID_OND = 120;
-    var GRID = { c2: 0.19, b: 0.03, k: 0.03, mu: 0.006, damp: 0.991, R: 2.0, rate: 120, life: 2.0, fade: 0.45 };
-    // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 3.47, must stay under 2(1 + a) with a the
-    // per-step velocity retention (damping × viscosity × sponge, ≥ 0.77 at the border): 3.55
+    // v1.5.3: 0.307× v1.5.2's speeds (300 → 92 px/s) at half its step rate (120 → 60 Hz: half the passes, and 4 steps
+    // a frame now cover frames down to 15 fps): c², β, κ × (0.307·2)² = 0.377; damping and viscosity per second kept
+    // (0.991² per step, μ × 2); the pressure × 0.75, as the slower surface answers a press more deeply (offline copy:
+    // qa/demo-r15/gridsim.py)
+    var GRID_P = 0.015, GRID_GAIN = 150, GRID_ON = 0.6, GRID_OND = 120;
+    var GRID = { c2: 0.0716, b: 0.0113, k: 0.0113, mu: 0.012, damp: 0.982, R: 2.0, rate: 60, life: 2.0, fade: 0.45 };
+    // stability (symplectic Euler): ω² at the grid Nyquist, 8c² + 64β + κ = 1.31, must stay under 2(1 + a) with a the
+    // per-step velocity retention (damping × viscosity × sponge, ≥ 0.75 at the border): 3.5
     var FS_GSTEP = HEAD + "uniform sampler2D Gt;uniform vec4 Sg,Pa;uniform vec2 gz;out vec4 o;" +
       "vec2 f(ivec2 c){return texelFetch(Gt,clamp(c,ivec2(0),ivec2(gz)-1),0).xy;}" +
       "void main(){ivec2 c=ivec2(gl_FragCoord.xy);vec2 q=f(c),l=f(c-ivec2(1,0)),r=f(c+ivec2(1,0)),d=f(c-ivec2(0,1)),u=f(c+ivec2(0,1));" +
@@ -362,7 +374,7 @@ function create(D) {
       // caustic a cell network, not a weave), slopes a few thousandths
       var AMB = new Float32Array(64), AW = [], seed = Math.random() * 6.283;
       for (var a = 0; a < 16; a++) {
-        var lam = 56 * Math.pow(240 / 56, (a + Math.random()) / 16), k = 6.2832 / lam, km = k / S;
+        var lam = 56 * Math.pow(240 / 56, (a + Math.random()) / 16), k = 6.2832 / lam, km = k / 6e-4; // (v1.5.3: the idle swell keeps its v1.5.2 timing, at its old 16.7 px/cm, slowed ASLOW: art direction, not a ripple)
         var dir = seed + (a * 0.618034 % 1 - 0.5) * 3.4 + (Math.random() - 0.5) * 0.4;
         AW.push({ kx: Math.cos(dir) * k, ky: Math.sin(dir) * k, amp: (0.0042 + Math.random() * 0.003) / k, w: Math.sqrt(G * km + SR * km * km * km) * ASLOW, ph: Math.random() * 6.283 });
       }
@@ -476,7 +488,7 @@ function create(D) {
           var R0 = rings[i], env = Math.min(1, R0.t / 0.05), life = Math.min(R0.life, LR);
           env *= R0.t > life - 0.6 ? Math.max(0, (life - R0.t) / 0.6) : 1;
           if (env <= 0 || !(R0.s > 0) || R0.t >= LR) continue;
-          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = 300 * R0.t + 8; Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.6); nI++;
+          Iu[nI * 4] = R0.x; Iu[nI * 4 + 1] = R0.y; Iu[nI * 4 + 2] = (R0.t / LR * (NTR - 1) + 0.5) / ROWS; Iu[nI * 4 + 3] = R0.s * look.ring * env; Qu[nI * 4] = front(R0.t); Qu[nI * 4 + 1] = Math.exp(-R0.t / 0.6); nI++;
         }
         for (var z = nI; z < SLOTS; z++) Iu[z * 4 + 3] = 0;
         var nS = 0, gk = gridStep(trail, T, sy, look);
@@ -604,7 +616,7 @@ function create(D) {
       return api;
     }
     // the radius of a ring's steepest crest (CSS px) at t seconds, for the fish it nudges
-    var front = function (t) { return 6 + 400 * t; };
+    var front = function (t) { return 8 + 88 * t; }; // v1.5.3: the visible lead at 4 px/cm (fitted to the profile, 15 % of its peak slope)
     // the same for a promo ring (v1.3.1's slow front)
     var pfront = function (t) { return 14 + 68 * t; };
     return { create: create, front: front, life: LR, trailLife: LS, trailN: NS, pfront: pfront, plife: PR_LIFE };
@@ -1017,14 +1029,14 @@ function create(D) {
         wake(); return;
       }
       if (!inside(x, y) || !free(x, py, 6)) { if (trl.length && trl[trl.length - 1].h) trl[trl.length - 1].h = 0; trCut(); P.gap = 1; return; }
-      // v1.4: below water's minimum wave speed (23 cm/s ≈ 380 px/s here) a straight stroke radiates almost nothing;
+      // v1.4: below water's minimum wave speed (23 cm/s ≈ 93 px/s at the koi's 4 px/cm, v1.5.3) a straight stroke radiates almost nothing;
       // above it the stroke sheds a wake whose strength grows with speed (the dimple carries the slow case)
       // The response stays continuous over the whole range: a soft onset over 280–420 px/s, then sub-linear growth
       // (≈ √U: the energy shed per length grows with speed, the wedge spreads it wider) with a gentle tanh limit, never a
       // hard cap (0.47 at 400 px/s, 0.56 at 600, 0.74 at 1200, 0.93 at 2400). The wedge narrows by itself: its arms are
       // where the visible front (~cg,min) has reached since each point was laid, so tan α ≈ c/U and the crest spacing
       // across an arm (the dispersed age there) scales with distance/U
-      var gate = M.max(0, M.min(1, (sp - 280) / 140)); gate = gate * gate * (3 - 2 * gate);
+      var gate = M.max(0, M.min(1, (sp - 70) / 35)); // v1.5.3: 280–420 px/s at 16.7 px/cm → 70–105 px/s at 4 px/cm gate = gate * gate * (3 - 2 * gate);
       var st = gate * 1.25 * Math.tanh(0.6 * Math.sqrt(sp / 600) / 1.25);
       P.s = P.s * 0.6 + st * 0.4;
       var H = trl[trl.length - 1];
@@ -1094,6 +1106,9 @@ function create(D) {
       if (RM.matches || (sel && t && t.closest && t.closest(sel))) return;
       var o = origin(), x = e.clientX - o[0], y = e.clientY - o[1];
       if (!inside(x, y) || !free(x, y + sy, 4)) return;
+      // v1.5.3: a hover ring the pointer just laid on this spot is the arrival packet CLK_S already holds: retire it (gone at
+      // once if it has not shown yet, else over 0.25 s under the click's own rising ring), so the spot rings once, as filmed
+      for (var hr = 0; hr < rip.length; hr++) { var hq = rip[hr]; if (hq.t < 0.3 && hyp(hq.x - x, hq.y - y - sy * rpz()) < 40) { hq.die = 1; hq.fk = 0.25; if (hq.t < 0.12) hq.e = 0; } }
       var c0 = addClick(x, y); // a click or tap: v1.2.1's single ring (a stroke swaps it for its own packet, see trMove)
       if (trOn() && (e.pointerType !== "mouse" || e.button === 0)) press = { clk: c0, ring: null, id: e.pointerId, touch: e.pointerType === "touch", x0: x, y0: y, t0: performance.now(), t: performance.now(), lx: x, ly: y, sp: 0, s: 0.4, act: false, gap: 0, held: false, dim: 1 };
       if (press && press.touch) { var P0 = press; setTimeout(function () { if (press === P0 && !P0.act) P0.held = true; }, 250); } // still for 250 ms = a hold
@@ -1106,14 +1121,14 @@ function create(D) {
     if (page) on(Wn, "scroll", function () { sy = Wn.scrollY || 0; wake(); }, { passive: true });
 
     // ── simulation ────────────────────────────────────────────────────────────
-    var ripR = function (r) { if (realLive) return WATER.front(r.t); return 6 + 300 * r.t * (r.s >= 1 ? 1.1 : 1); }; // flat: brisk, like the real fronts
+    var ripR = function (r) { if (realLive) return WATER.front(r.t); return 6 + 88 * r.t * (r.s >= 1 ? 1.1 : 1); }; // flat: like the real fronts (v1.5.3: at the koi's scale)
     var ripEnv = function (r) { var u = r.t / r.life; return M.min(1, r.t / 0.05) * M.pow(M.max(0, 1 - u), 1.2) * r.s * r.e; };
     var step = function (dt) {
       T += dt;
       var rm = RM.matches;
       ptr.idle += dt;
       for (var ri = rip.length - 1; ri >= 0; ri--) {
-        var rq = rip[ri]; rq.t += dt; if (rq.die) rq.e -= dt / 0.8;
+        var rq = rip[ri]; rq.t += dt; if (rq.die) rq.e -= dt / (rq.fk || 0.8);
         if (rq.t > rq.life || rq.e <= 0 || rm) rip.splice(ri, 1);
       }
       for (var cj = clk.length - 1; cj >= 0; cj--) { var cq0 = clk[cj]; cq0.t += dt; if (cq0.dk) cq0.e -= dt / 0.3; else if (cq0.die) cq0.e -= dt / 0.8; if (cq0.t > clkLife() || cq0.e <= 0 || rm) clk.splice(cj, 1); }
@@ -1705,7 +1720,7 @@ function create(D) {
           var A1 = trl[a1 - 1], B1 = trl[a1];
           if (A1.s <= 0 || B1.s <= 0) continue;
           var tm = (A1.t + B1.t) / 2, en2 = M.min(1, tm / 0.04) * M.pow(M.max(0, 1 - tm / TRL_LS), 1.2) * (A1.s + B1.s) / 2;
-          var rA = 4 + 300 * A1.t - wv * 10, rB = 4 + 300 * B1.t - wv * 10; // thin fronts leaving the stroke at ~300 px/s
+          var rA = 4 + 88 * A1.t - wv * 10, rB = 4 + 88 * B1.t - wv * 10; // thin fronts leaving the stroke at ~90 px/s (v1.5.3)
           if (rA < 1 && rB < 1) continue;
           var r2 = M.max(rA, rB), ak2 = en2 * [1, 0.5][wv] / M.sqrt(1 + r2 / 40);
           if (ak2 < 0.004) continue;

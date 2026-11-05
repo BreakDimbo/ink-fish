@@ -47,13 +47,15 @@ async def main():
             for i in range(1, 61): await at(0.15 + 2.0 * i / 60); await pg.mouse.move(X + 400 * i / 60, Y)
             await pg.mouse.up()
         await at(DUR); await cdp.send("Page.stopScreencast"); await pg.wait_for_timeout(300)
-        rt = await pg.evaluate("__rt.slice(-2000)"); wst = await pg.evaluate("document.body.__inkFish.water")
+        rt = await pg.evaluate("__rt.filter(t => t > performance.now() - (%f + 0.3) * 1000)" % DUR); wst = await pg.evaluate("document.body.__inkFish.water")
         print(name, "frames", len(frames), "errors", errs, "water", wst)
         meta = []
         for i, (ts, data) in enumerate(frames):
             open(f"{OUT}/f{i:04d}.jpg", "wb").write(base64.b64decode(data)); meta.append(dict(i=i, t=ts - marks["press"]))
-        iv = [b_ - a for a, b_ in zip(rt, rt[1:])]; iv.sort()
-        json.dump(dict(frames=meta, raf_median_ms=iv[len(iv) // 2] if iv else None, raf_p90_ms=iv[int(len(iv) * .9)] if iv else None, water=wst), open(f"{OUT}/meta.json", "w"))
-        print("rAF median %.1f ms p90 %.1f ms" % (iv[len(iv) // 2], iv[int(len(iv) * .9)]))
+        iv = [b_ - a for a, b_ in zip(rt, rt[1:])]
+        simrate = sum(min(x, 100) for x in iv) / max(1e-9, sum(iv))  # the library caps a frame's dt at 0.1 s: its clock vs the wall's
+        iv.sort()
+        json.dump(dict(frames=meta, raf_median_ms=iv[len(iv) // 2] if iv else None, raf_p90_ms=iv[int(len(iv) * .9)] if iv else None, simrate=simrate, water=wst), open(f"{OUT}/meta.json", "w"))
+        print("rAF median %.1f ms p90 %.1f ms sim/wall %.3f" % (iv[len(iv) // 2], iv[int(len(iv) * .9)], simrate))
         await b.close()
 asyncio.run(main())
